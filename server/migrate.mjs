@@ -112,7 +112,7 @@ function migrateProducts(state, company) {
       game.id,
       company.id,
       game.name || 'Untitled product',
-      game.studio || 'Aviator Studio',
+      game.studio || 'Demo Studio',
       game.status || 'draft',
       game.description || '',
       game.version || '0.1.0',
@@ -297,7 +297,7 @@ async function main() {
   console.log(`Superadmin: ${superUser.email} (id=${superUser.id})`);
 
   // 2. Default company
-  const company = ensureCompany({ name: 'Aviator Studio', slug: makeSlug() });
+  const company = ensureCompany({ name: process.env.COMPANY_NAME || 'Demo Studio', slug: makeSlug() });
   console.log(`Company: ${company.name} (slug=${company.slug}, id=${company.id})`);
 
   // 3. Migrate everything
@@ -314,8 +314,8 @@ async function main() {
   // 4. Default company admin
   const { user: coAdmin, password: coPassword } = await ensureCompanyAdmin(
     company,
-    'Aviator Studio Admin',
-    'admin@aviator-studio.local',
+    process.env.ADMIN_NAME || 'Studio Admin',
+    process.env.ADMIN_EMAIL || 'admin@example.com',
   );
   console.log(`Company admin: ${coAdmin.email} (id=${coAdmin.id})`);
 
@@ -346,7 +346,7 @@ async function main() {
     lines.push(`Company admin already existed for ${company.name}.`);
     lines.push('');
   }
-  lines.push(`Aviator Studio company slug: ${company.slug}`);
+  lines.push(`Company slug: ${company.slug}`);
   lines.push(`Migration timestamp: ${nowIso()}`);
   writeFileSync(CREDS_FILE, lines.join('\n'));
   console.log(`Credentials written to ${CREDS_FILE}`);

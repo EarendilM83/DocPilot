@@ -23,7 +23,7 @@ describe('resolveReaderTheme', () => {
     expect(theme).toEqual({ accent: '#111111', defaultMode: 'light' });
   });
 
-  it('defaults to Aviator red + system when both surfaces are missing', () => {
+  it('defaults to brand red + system when both surfaces are missing', () => {
     const theme = resolveReaderTheme(null, null);
     expect(theme).toEqual({ accent: '#ff1b23', defaultMode: 'system' });
   });
@@ -60,8 +60,8 @@ describe('session mode storage', () => {
   beforeEach(() => localStorage.clear());
 
   it('round-trips a session mode by tenant slug', () => {
-    saveSessionMode('aviator', 'dark');
-    expect(loadSessionMode('aviator')).toBe('dark');
+    saveSessionMode('demo', 'dark');
+    expect(loadSessionMode('demo')).toBe('dark');
   });
 
   it('returns null when nothing is stored', () => {

@@ -366,3 +366,33 @@
   border-top: 1px solid #d6dbe4;
   padding-top: 10px;
 }
+
+/* QA (qa-admin §7): company admin on mobile — header actions squished into
+   ovals with 3-line wrapped text, and the users table clipped STATUS/LAST
+   LOGIN/actions off-screen with no scroll affordance. */
+.company-admin-table-scroll,
+.company-admin-body { min-width: 0; }
+@media (max-width: 900px) {
+  .company-admin-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .company-admin-table th,
+  .company-admin-table td { white-space: nowrap; }
+}
+@media (max-width: 640px) {
+  .company-admin-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .company-admin-nav {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .company-admin-nav a,
+  .company-admin-nav button {
+    white-space: nowrap;
+  }
+}

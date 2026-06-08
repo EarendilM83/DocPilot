@@ -13,24 +13,31 @@
  *                          dropped per spec section 4.4).
  */
 
+/* ADS token foundation (Phase 1): the reader's local palette is mapped onto
+   @atlaskit/tokens semantic custom properties. setGlobalTheme() in main.tsx
+   mounts the --ds-* variables on <html>; DocReader keeps data-color-mode in
+   sync with the reader's own light/dark toggle, so the same mapping serves
+   both modes. The previous hand-rolled values remain as fallbacks in case
+   theme CSS fails to mount. */
 .docpilot-reader {
-  --bg: #ffffff;
-  --bg-2: #fafafa;
-  --bg-3: #f3f4f6;
-  --ink: #0a0a0a;
-  --ink-2: #404653;
-  --ink-3: #6b7280;
-  --ink-4: #9ca3af;
-  --line: #ececec;
-  --line-2: #e5e7eb;
+  --bg: var(--ds-surface, #ffffff);
+  --bg-2: var(--ds-surface-sunken, #fafafa);
+  --bg-3: var(--ds-background-neutral, #f3f4f6);
+  --ink: var(--ds-text, #0a0a0a);
+  --ink-2: var(--ds-text-subtle, #404653);
+  --ink-3: var(--ds-text-subtlest, #6b7280);
+  --ink-4: var(--ds-text-disabled, #9ca3af);
+  --line: var(--ds-border, #ececec);
+  --line-2: var(--ds-border, #e5e7eb);
   --accent: #ff1b23;
   --accent-2: color-mix(in srgb, var(--accent) 88%, black);
   --accent-soft: color-mix(in srgb, var(--accent) 12%, white);
-  --green: #10b981;
-  --red: #dc2626;
-  --amber: #d97706;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --link: var(--ds-link, #0c66e4);
+  --green: var(--ds-icon-success, #10b981);
+  --red: var(--ds-text-danger, #dc2626);
+  --amber: var(--ds-text-warning, #d97706);
+  --shadow-sm: var(--ds-shadow-raised, 0 1px 2px rgba(0, 0, 0, 0.04));
+  --shadow: var(--ds-shadow-overlay, 0 4px 12px rgba(0, 0, 0, 0.06));
 
   background: var(--bg);
   color: var(--ink);
@@ -40,19 +47,21 @@
   min-height: 100vh;
 }
 
+/* Dark mode rides the same --ds-* tokens (they flip with data-color-mode on
+   <html>); only the non-token fallbacks and accent mixing differ. */
 .docpilot-reader[data-theme='dark'] {
-  --bg: #0b0d12;
-  --bg-2: #11141b;
-  --bg-3: #1a1f29;
-  --ink: #f5f6f8;
-  --ink-2: #c8cdd9;
-  --ink-3: #8b93a3;
-  --ink-4: #5a6371;
-  --line: #1f242e;
-  --line-2: #262c38;
+  --bg: var(--ds-surface, #0b0d12);
+  --bg-2: var(--ds-surface-sunken, #11141b);
+  --bg-3: var(--ds-background-neutral, #1a1f29);
+  --ink: var(--ds-text, #f5f6f8);
+  --ink-2: var(--ds-text-subtle, #c8cdd9);
+  --ink-3: var(--ds-text-subtlest, #8b93a3);
+  --ink-4: var(--ds-text-disabled, #5a6371);
+  --line: var(--ds-border, #1f242e);
+  --line-2: var(--ds-border, #262c38);
   --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--bg));
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-sm: var(--ds-shadow-raised, 0 1px 2px rgba(0, 0, 0, 0.3));
+  --shadow: var(--ds-shadow-overlay, 0 4px 12px rgba(0, 0, 0, 0.4));
 }
 
 .docpilot-reader * { box-sizing: border-box; }
@@ -137,26 +146,24 @@
 .docpilot-reader main section.content .doc-tab-panel p,
 .docpilot-reader main section.content .doc-component-regions.ui-list > .doc-component-title { color: var(--ink) !important; }
 
-/* Tabs component: the base styles (styles.css) target a light page, so the
-   reader only inherited their text color above — leaving a leaked light
-   card background and a stray red left-border that made the first option
-   look like a stuck "selected" state. Re-skin the whole component for the
-   dark reader theme so both options read as equal, consistent chips. */
+/* Tabs component — ADS tabs pattern: a flat strip of text tabs over a
+   1px baseline, the selected tab marked by link-blue text and a 2px
+   underline sitting on the baseline. No chips, no boxes. Covers both
+   markup eras (.doc-tabs buttons / legacy .doc-tab-list spans). */
 .docpilot-reader main section.content .doc-component-tabs {
-  background: var(--bg-2) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 10px;
-  padding: 14px 16px;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0;
+  padding: 0;
 }
-/* Force the tab strip to a compact flex row so the buttons size to their
-   label instead of ballooning into huge half-width white cards. Covers every
-   historical markup shape: .doc-tab-list / .doc-tabs, span or button. */
 .docpilot-reader main section.content .doc-tab-list,
-.docpilot-reader main section.content .doc-tabs > .doc-tab-list {
+.docpilot-reader main section.content .doc-tabs {
   display: flex !important;
   flex-wrap: wrap;
-  gap: 8px !important;
-  margin-bottom: 12px;
+  gap: 0 !important;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--line) !important;
+  background: transparent !important;
 }
 .docpilot-reader main section.content .doc-tab-list span,
 .docpilot-reader main section.content .doc-tab-list button,
@@ -164,29 +171,45 @@
 .docpilot-reader main section.content .doc-tabs button {
   flex: 0 0 auto !important;
   width: auto !important;
-  background: var(--bg) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 8px !important;
-  color: var(--ink) !important;
-  padding: 8px 14px !important;
-  font-weight: 600 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  color: var(--ink-2) !important;
+  padding: 8px 12px !important;
+  margin-bottom: -1px !important; /* underline sits ON the baseline */
+  font-weight: 500 !important;
+  font-size: 14px !important;
   box-shadow: none !important;
   min-height: 0 !important;
   cursor: pointer;
+}
+.docpilot-reader main section.content .doc-tab-list span:hover,
+.docpilot-reader main section.content .doc-tab-list button:hover,
+.docpilot-reader main section.content .doc-tabs span:hover,
+.docpilot-reader main section.content .doc-tabs button:hover {
+  color: var(--ink) !important;
 }
 .docpilot-reader main section.content .doc-tab-list span.active,
 .docpilot-reader main section.content .doc-tab-list button.active,
 .docpilot-reader main section.content .doc-tabs span.active,
 .docpilot-reader main section.content .doc-tabs button.active {
-  background: var(--accent-soft) !important;
-  border-color: var(--accent) !important;
-  color: var(--accent) !important;
+  background: transparent !important;
+  border-bottom-color: var(--link) !important;
+  color: var(--link) !important;
+  font-weight: 600 !important;
 }
 .docpilot-reader main section.content .doc-tab-panel {
-  background: var(--bg) !important;
-  border: 1px solid var(--line) !important;
-  border-left: 3px solid var(--accent) !important;
-  border-radius: 8px;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0;
+  padding: 12px 0 0 !important;
+}
+/* The tabs component title sits flush above the strip. */
+.docpilot-reader main .doc-component-tabs > .doc-component-title,
+.docpilot-reader main .doc-component-tabs > h4 {
+  padding: 0 0 8px !important;
+  border-bottom: 0 !important;
 }
 
 .docpilot-reader .side-list { list-style: none; padding: 0; margin: 0; }
@@ -229,11 +252,12 @@
 }
 .docpilot-reader main li { margin: 4px 0; }
 .docpilot-reader main strong { font-weight: 600; }
+/* ADS pattern: content links are link-blue; the brand accent stays on chrome. */
 .docpilot-reader main a {
-  color: var(--accent); text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--link); text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--link) 40%, transparent);
 }
-.docpilot-reader main a:hover { border-bottom-color: var(--accent); }
+.docpilot-reader main a:hover { border-bottom-color: var(--link); }
 
 .docpilot-reader main code {
   font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 13px;
@@ -272,37 +296,86 @@
 .docpilot-reader main figcaption { font-size: 12.5px; color: var(--ink-3); margin-top: 8px; }
 .docpilot-reader main figcaption strong { color: var(--ink-2); font-weight: 600; }
 
+/* Callouts — ADS section-message pattern (audit P1 #16). Visible variant
+   identity: solid tinted background + 3px accent border + glyph, driven by
+   semantic tokens so light/dark both work. Selectors cover BOTH markup eras:
+   modern `data-variant="x"` and legacy class aliases (info/note/warning/warn/
+   important/danger/success/tip). Default appearance: information (blue). */
 .docpilot-reader main .callout {
+  --callout-bg: var(--ds-background-information, #e9f2ff);
+  --callout-accent: var(--ds-icon-information, #1d7afc);
+  --callout-glyph: 'ℹ';
+  position: relative;
   display: block;
-  padding: 12px 14px; border-radius: 8px; margin: 14px 0;
-  font-size: 14px; line-height: 1.55; background: var(--accent-soft);
+  padding: 12px 16px 12px 44px; border-radius: var(--ds-radius-small, 3px); margin: 14px 0;
+  font-size: 14px; line-height: 1.55;
+  background: var(--callout-bg);
+  border-left: 3px solid var(--callout-accent);
 }
-.docpilot-reader main .callout:has(> .callout-icon) {
-  display: grid; grid-template-columns: 22px 1fr; gap: 12px;
-}
-.docpilot-reader main .callout > .callout-title {
-  display: block;
-}
-.docpilot-reader main .callout > .callout-icon {
-  width: 20px; height: 20px; border-radius: 50%;
+.docpilot-reader main .callout::before {
+  content: var(--callout-glyph);
+  position: absolute; left: 16px; top: 12px;
+  width: 18px; height: 18px;
   display: inline-grid; place-items: center;
-  font-size: 11px; font-weight: 700; color: #fff; margin-top: 2px; background: var(--accent);
+  font-size: 14px; line-height: 1; font-weight: 700; font-style: normal;
+  color: var(--callout-accent);
 }
+/* The hand-rolled icon bubble is superseded by the ::before glyph. */
+.docpilot-reader main .callout > .callout-icon { display: none; }
+.docpilot-reader main .callout > .callout-title { display: block; }
 .docpilot-reader main .callout .callout-title { font-weight: 600; color: var(--ink); margin-bottom: 2px; }
 .docpilot-reader main .callout p { margin: 0; font-size: 14px; }
-.docpilot-reader main .callout.warn { background: color-mix(in srgb, var(--amber) 10%, var(--bg)); }
-.docpilot-reader main .callout.warn > .callout-icon { background: var(--amber); }
-.docpilot-reader main .callout.danger { background: color-mix(in srgb, var(--red) 10%, var(--bg)); }
-.docpilot-reader main .callout.danger > .callout-icon { background: var(--red); }
-.docpilot-reader main .callout.success { background: color-mix(in srgb, var(--green) 10%, var(--bg)); }
-.docpilot-reader main .callout.success > .callout-icon { background: var(--green); }
 
-/* Legacy callout class compatibility (spec §6.5) */
-.docpilot-reader main .callout.info { background: var(--accent-soft); }
-.docpilot-reader main .callout.warning { background: color-mix(in srgb, var(--amber) 10%, var(--bg)); }
-.docpilot-reader main .callout.warning > .callout-icon { background: var(--amber); }
-.docpilot-reader main .callout.important { background: color-mix(in srgb, var(--red) 10%, var(--bg)); }
-.docpilot-reader main .callout.important > .callout-icon { background: var(--red); }
+/* warning — modern attr, current + legacy classes */
+.docpilot-reader main .callout[data-variant='warning'],
+.docpilot-reader main .callout.warn,
+.docpilot-reader main .callout.warning {
+  --callout-bg: var(--ds-background-warning, #fff7d6);
+  --callout-accent: var(--ds-icon-warning, #b38600);
+  --callout-glyph: '⚠';
+}
+/* danger / error */
+.docpilot-reader main .callout[data-variant='danger'],
+.docpilot-reader main .callout[data-variant='error'],
+.docpilot-reader main .callout.danger,
+.docpilot-reader main .callout.important {
+  --callout-bg: var(--ds-background-danger, #ffeceb);
+  --callout-accent: var(--ds-icon-danger, #c9372c);
+  --callout-glyph: '✕';
+}
+/* success / tip */
+.docpilot-reader main .callout[data-variant='success'],
+.docpilot-reader main .callout.success,
+.docpilot-reader main .callout.tip {
+  --callout-bg: var(--ds-background-success, #dcfff1);
+  --callout-accent: var(--ds-icon-success, #22a06b);
+  --callout-glyph: '✓';
+}
+/* discovery */
+.docpilot-reader main .callout[data-variant='discovery'],
+.docpilot-reader main .callout.discovery {
+  --callout-bg: var(--ds-background-discovery, #f3f0ff);
+  --callout-accent: var(--ds-icon-discovery, #8270db);
+  --callout-glyph: '✦';
+}
+/* Steps title sits flush above the tinted items, like the editor preview. */
+.docpilot-reader main .doc-component-steps > .doc-component-title,
+.docpilot-reader main .doc-component-steps > h4 {
+  padding: 0 0 8px !important;
+  border-bottom: 0 !important;
+}
+
+/* Inside a callout the generic doc-component title/body chrome (padding,
+   separator) is dropped — section messages are a single flush block. */
+.docpilot-reader main .callout .doc-component-title,
+.docpilot-reader main .callout h4 {
+  padding: 0 !important;
+  border-bottom: 0 !important;
+  margin: 0 0 4px;
+}
+.docpilot-reader main .callout .doc-component-body {
+  padding: 0 !important;
+}
 
 /* Defang legacy section-banner inside the new reader (spec §4.4) */
 .docpilot-reader main .section-banner { all: unset; display: contents; }
@@ -524,13 +597,7 @@ dialog.search-modal::backdrop { background: rgba(0, 0, 0, .4); }
   margin: 0; padding: 0; color: var(--ink);
 }
 
-/* Missing callout variant: .callout.tip → green */
-.docpilot-reader main .callout.tip {
-  background: color-mix(in srgb, var(--green) 10%, var(--bg));
-}
-.docpilot-reader main .callout.tip > .callout-icon,
-.docpilot-reader main .callout.tip > .callout-title { color: var(--green); }
-.docpilot-reader main .callout .callout-title { color: var(--ink); font-weight: 600; font-size: 13.5px; letter-spacing: .02em; text-transform: uppercase; }
+/* .callout.tip is handled by the ADS success variant block above. */
 .docpilot-reader main .callout p { color: var(--ink); }
 
 /* Inline UI labels (game buttons like Bet / Cash Out) — keep but harmonise */
@@ -549,9 +616,12 @@ dialog.search-modal::backdrop { background: rgba(0, 0, 0, .4); }
   color: var(--ink-3); font-size: 12px; font-weight: 500;
 }
 
-/* Steps list */
-.docpilot-reader main ol.steps { list-style: decimal inside; padding-left: 0; }
-.docpilot-reader main ol.steps > li { margin: 6px 0; }
+/* Steps list — the styles.css .steps li::before badge already numbers the
+   items; browser list numbering on top duplicated every ordinal in the
+   reader (editor↔reader parity bug). Zero margins keep the timeline
+   connector continuous between badges. */
+.docpilot-reader main ol.steps { list-style: none; padding-left: 0; }
+.docpilot-reader main ol.steps > li { margin: 0; }
 
 /* Two-column layout */
 .docpilot-reader main .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
@@ -635,7 +705,7 @@ dialog.search-modal::backdrop { background: rgba(0, 0, 0, .4); }
   margin-top: 8px; border-radius: 2px;
 }
 
-/* Sidebar group label — matches demo "AVIATOR / OPERATOR / REFERENCE" style */
+/* Sidebar group label — uppercase section-group style */
 .docpilot-reader .side-group-label {
   font-size: 11px; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
@@ -688,13 +758,17 @@ dialog.search-modal::backdrop { background: rgba(0, 0, 0, .4); }
   background: transparent !important;
 }
 
-/* Doc components (accordion / panel / card) — legacy bg: #fff */
-.docpilot-reader main .doc-component,
+/* Doc components (accordion / panel / card) — legacy bg: #fff.
+   Callouts excluded (ADS section-message pattern) and steps excluded
+   (per-item tinted blocks, same as the editor preview — parity). */
+/* Tabs excluded — they are the flat ADS strip (no card box); including them
+   here used to win the specificity fight via the :not() chain and re-add a
+   border around a zero-padding box (content rammed into the card edge). */
+.docpilot-reader main .doc-component:not(.doc-component-callout):not(.callout):not(.doc-component-steps):not(.doc-component-tabs),
 .docpilot-reader main .doc-component-accordion,
 .docpilot-reader main .doc-component-card,
 .docpilot-reader main .doc-component-panel,
-.docpilot-reader main .doc-component-grid,
-.docpilot-reader main .doc-component-tabs {
+.docpilot-reader main .doc-component-grid {
   background: var(--bg-2) !important;
   color: var(--ink) !important;
   border: 1px solid var(--line) !important;
@@ -749,12 +823,14 @@ dialog.search-modal::backdrop { background: rgba(0, 0, 0, .4); }
   padding: 0 14px 12px !important;
 }
 
-/* Figure caption — legacy bg: var(--pale-white), color: var(--coral) */
+/* Figure caption — legacy bg: var(--pale-white), color: var(--coral).
+   Kill ALL the legacy caption borders: zeroing only border-left used to
+   leave a 1px box open on the left side ("weird border" on Fig 1/2). */
 .docpilot-reader main figure figcaption,
 .docpilot-reader main figcaption {
   background: transparent !important;
   color: var(--ink-3) !important;
-  border-left: 0 !important;
+  border: 0 !important;
   padding: 8px 0 0 !important;
   margin: 0 !important;
   font-size: 12.5px !important;
@@ -800,30 +876,35 @@ dialog.search-modal::backdrop { background: rgba(0, 0, 0, .4); }
   color: var(--ink) !important;
 }
 
-/* Steps list */
+/* Steps list — the shared timeline design from styles.css, themed: brand
+   badge, token connector, transparent items in both modes. */
 .docpilot-reader main ol.steps {
-  background: var(--bg-2) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 10px !important;
-  padding: 12px 16px 12px 36px !important;
+  --steps-badge-bg: var(--accent);
+  --steps-connector: var(--line-2);
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
   color: var(--ink) !important;
 }
 .docpilot-reader main ol.steps > li {
   color: var(--ink) !important;
   background: transparent !important;
+  border-radius: 0 !important;
 }
+.docpilot-reader main ol.steps > li p { color: var(--ink-2) !important; }
 
 /* Doc-component nested class-chain overrides (legacy uses
    .doc-component-accordion / .doc-component-item-title which
-   are more specific than my single-class selectors above). */
-.docpilot-reader main .doc-component,
+   are more specific than my single-class selectors above).
+   Callouts excluded — they keep the ADS section-message tint. */
+.docpilot-reader main .doc-component:not(.doc-component-callout):not(.callout):not(.doc-component-steps),
 .docpilot-reader main .doc-component.doc-component-accordion,
 .docpilot-reader main .doc-component.doc-component-card,
 .docpilot-reader main .doc-component.doc-component-tabs,
 .docpilot-reader main .doc-component-item,
 .docpilot-reader main .doc-component-item-title,
 .docpilot-reader main .doc-component-item-body,
-.docpilot-reader main .doc-component-title,
 .docpilot-reader main .doc-component-body,
 .docpilot-reader main .doc-component-summary,
 .docpilot-reader main .doc-component summary,
@@ -831,8 +912,37 @@ dialog.search-modal::backdrop { background: rgba(0, 0, 0, .4); }
   color: var(--ink) !important;
   background: transparent !important;
 }
-.docpilot-reader main .doc-component {
+.docpilot-reader main .doc-component:not(.doc-component-callout):not(.callout):not(.doc-component-steps):not(.doc-component-tabs) {
   background: var(--bg-2) !important;
+}
+
+/* Component titles read as HEADINGS: larger, bolder, and tinted by the
+   component variant so they stand apart from body text (h2/h3 keep ink).
+   Placed after (and at matching specificity to) the forced-ink groups so
+   the tint wins by source order. */
+.docpilot-reader main section.content .doc-component-title,
+.docpilot-reader main section.content .doc-component > h4 {
+  font-size: 15.5px !important;
+  font-weight: 700 !important;
+  color: var(--ink) !important;
+}
+.docpilot-reader main section.content .doc-component-variant-info > .doc-component-title,
+.docpilot-reader main section.content .doc-component-variant-info > h4 {
+  color: var(--ds-text-information, #0055cc) !important;
+}
+.docpilot-reader main section.content .doc-component-variant-warning > .doc-component-title,
+.docpilot-reader main section.content .doc-component-variant-warning > h4 {
+  color: var(--ds-text-warning, #7f5f01) !important;
+}
+.docpilot-reader main section.content .doc-component-variant-danger > .doc-component-title,
+.docpilot-reader main section.content .doc-component-variant-error > .doc-component-title,
+.docpilot-reader main section.content .doc-component-variant-danger > h4,
+.docpilot-reader main section.content .doc-component-variant-error > h4 {
+  color: var(--ds-text-danger, #ae2e24) !important;
+}
+.docpilot-reader main section.content .doc-component-variant-success > .doc-component-title,
+.docpilot-reader main section.content .doc-component-variant-success > h4 {
+  color: var(--ds-text-success, #216e4e) !important;
 }
 .docpilot-reader main .doc-component-item + .doc-component-item,
 .docpilot-reader main .doc-component details + details {
@@ -1022,10 +1132,11 @@ dialog.search-modal::backdrop { background: rgba(0, 0, 0, .4); }
 }
 
 /* .green.ui / .red.ui chips — white-on-bright fails AA at small sizes.
-   Force dark text on the green chip; bump red weight; keep min-height. */
+   Force dark text on the green chip; bump red weight; keep min-height.
+   #04321f on the green was still only 4.22:1 — black clears AA at 6.26:1. */
 .docpilot-reader main .ui.green {
   background: var(--green) !important;
-  color: #04321f !important;
+  color: #000000 !important;
   font-weight: 700 !important;
 }
 .docpilot-reader main .ui.red {
@@ -1073,6 +1184,15 @@ dialog.search-modal::backdrop { background: rgba(0, 0, 0, .4); }
 .docpilot-reader[data-theme='light'] main a:hover {
   color: var(--accent);
   border-bottom-color: var(--accent);
+}
+
+/* Links on tinted callout backgrounds — the brand reds (4.27/4.4) miss AA
+   on the danger tint; this darker red clears 4.5:1 on every tint. Callout
+   tints stay light in both themes, so the override is theme-agnostic and
+   must sit AFTER the per-theme body-link rules above to win the tie. */
+.docpilot-reader main .callout a {
+  color: #b81016;
+  border-bottom-color: color-mix(in srgb, #b81016 55%, transparent);
 }
 
 /* Marker chip (data-popover-x) — use --accent-2 background in light mode

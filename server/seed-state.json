@@ -1,3 +1,180 @@
 {
-  "keys": {}
+  "keys": {
+    "cms_games_v1": {
+      "value": [
+        {
+          "id": "nimbus",
+          "name": "Nimbus",
+          "studio": "Demo Studio",
+          "status": "published",
+          "description": "A fictional demo game used to showcase the DocPilot documentation platform.",
+          "version": "1.0.0",
+          "updatedAt": "2026-06-08"
+        }
+      ]
+    },
+    "cms_docs_v2": {
+      "value": [
+        {
+          "id": "doc-nimbus-getting-started",
+          "gameId": "nimbus",
+          "title": "Getting Started",
+          "slug": "nimbus-getting-started",
+          "type": "game",
+          "description": "A short introduction to the Nimbus demo content.",
+          "version": "1.0.0",
+          "status": "published",
+          "owner": "Docs",
+          "reviewer": "Docs",
+          "audience": "Everyone",
+          "taxonomy": "demo, intro",
+          "navPlacement": "primary",
+          "navOrder": 0,
+          "templateId": "game-manual",
+          "updatedAt": "2026-06-08",
+          "sections": 1
+        },
+        {
+          "id": "doc-nimbus-component-gallery",
+          "gameId": "nimbus",
+          "title": "Component Gallery — Every Element",
+          "slug": "nimbus-component-gallery",
+          "type": "game",
+          "description": "Demonstrates every managed component in the DocPilot section editor.",
+          "version": "1.0.0",
+          "status": "published",
+          "owner": "Docs",
+          "reviewer": "Docs",
+          "audience": "Authors, editors",
+          "taxonomy": "demo, components, reference",
+          "navPlacement": "primary",
+          "navOrder": 1,
+          "templateId": "game-manual",
+          "updatedAt": "2026-06-08",
+          "sections": 10
+        }
+      ]
+    },
+    "cms_selected_product_v1": {
+      "value": "nimbus"
+    },
+    "cms_custom_sections_v1": {
+      "value": {
+        "doc-nimbus-getting-started": [
+          {
+            "id": "doc-nimbus-getting-started-s1",
+            "number": "1.0",
+            "slug": "welcome",
+            "title": "Welcome to Nimbus",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "A short intro doc.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-getting-started-s1\"><div class=\"container\"><div class=\"num\">1.0</div><h2>Welcome to Nimbus</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>Nimbus is a fictional game that ships as demo content with DocPilot. Use it to explore the reader and the admin CMS without touching real tenant data.</p><div class=\"doc-component doc-component-callout doc-component-variant-success callout success\" data-doc-component=\"callout\" data-component-id=\"doc-nimbus-getting-started-s1-next\" data-variant=\"success\" data-ordered=\"false\"><span class=\"callout-title doc-component-title\">Next</span><div class=\"doc-component-body\"><p>Open the <strong>Component Gallery</strong> document to see every editor element in action.</p></div></div>\n</div></section>"
+          }
+        ],
+        "doc-nimbus-component-gallery": [
+          {
+            "id": "doc-nimbus-component-gallery-s1",
+            "number": "1.0",
+            "slug": "overview",
+            "title": "Component Gallery — Overview",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "What this gallery is and how to read it.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-component-gallery-s1\"><div class=\"container\"><div class=\"num\">1.0</div><h2>Component Gallery — Overview</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>This document is a living showcase of every building block available in the DocPilot section editor. Each section below demonstrates one managed component in context, using placeholder copy for the fictional game <strong>Nimbus</strong>.</p><h3>1.1 How to use it</h3><p>Open this document in the admin editor to see how each component is authored, or read it here to see how it renders. Everything is dummy content — safe to clone, edit, or delete.</p><div class=\"doc-component doc-component-callout doc-component-variant-info callout info\" data-doc-component=\"callout\" data-component-id=\"doc-nimbus-component-gallery-s1-tip\" data-variant=\"info\" data-ordered=\"false\"><span class=\"callout-title doc-component-title\">Tip</span><div class=\"doc-component-body\"><p>Duplicate this document to bootstrap a real product guide, then swap the placeholder text and images for your own.</p></div></div>\n</div></section>"
+          },
+          {
+            "id": "doc-nimbus-component-gallery-s2",
+            "number": "2.0",
+            "slug": "callouts",
+            "title": "Callouts",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "All five callout variants.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-component-gallery-s2\"><div class=\"container\"><div class=\"num\">2.0</div><h2>Callouts</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>Callouts highlight a single idea. Five variants carry different weight:</p><div class=\"doc-component doc-component-callout doc-component-variant-info callout info\" data-doc-component=\"callout\" data-component-id=\"doc-nimbus-component-gallery-s2-info\" data-variant=\"info\" data-ordered=\"false\"><span class=\"callout-title doc-component-title\">Information</span><div class=\"doc-component-body\"><p>Neutral context or a clarification.</p></div></div><div class=\"doc-component doc-component-callout doc-component-variant-success callout success\" data-doc-component=\"callout\" data-component-id=\"doc-nimbus-component-gallery-s2-success\" data-variant=\"success\" data-ordered=\"false\"><span class=\"callout-title doc-component-title\">Success</span><div class=\"doc-component-body\"><p>A positive outcome or a confirmed-safe path.</p></div></div><div class=\"doc-component doc-component-callout doc-component-variant-warning callout important\" data-doc-component=\"callout\" data-component-id=\"doc-nimbus-component-gallery-s2-warning\" data-variant=\"warning\" data-ordered=\"false\"><span class=\"callout-title doc-component-title\">Observed value, not a rule</span><div class=\"doc-component-body\"><p>Numbers seen in a screenshot are examples until product specs confirm them.</p></div></div><div class=\"doc-component doc-component-callout doc-component-variant-danger callout danger\" data-doc-component=\"callout\" data-component-id=\"doc-nimbus-component-gallery-s2-danger\" data-variant=\"danger\" data-ordered=\"false\"><span class=\"callout-title doc-component-title\">Danger</span><div class=\"doc-component-body\"><p>Something that costs the player money if misunderstood.</p></div></div><div class=\"doc-component doc-component-callout doc-component-variant-note callout note\" data-doc-component=\"callout\" data-component-id=\"doc-nimbus-component-gallery-s2-note\" data-variant=\"note\" data-ordered=\"false\"><span class=\"callout-title doc-component-title\">Note</span><div class=\"doc-component-body\"><p>An aside or a secondary detail worth recording.</p></div></div>\n</div></section>"
+          },
+          {
+            "id": "doc-nimbus-component-gallery-s3",
+            "number": "3.0",
+            "slug": "list",
+            "title": "Bullet List",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "Managed bullet list.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-component-gallery-s3\"><div class=\"container\"><div class=\"num\">3.0</div><h2>Bullet List</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>A managed list keeps each item individually editable.</p><div class=\"doc-component doc-component-list doc-component-variant-info\" data-doc-component=\"list\" data-component-id=\"doc-nimbus-component-gallery-s3-quick\" data-variant=\"info\" data-ordered=\"false\"><h4 class=\"doc-component-title\">Quick Reference</h4><ul><li data-component-item-id=\"doc-nimbus-component-gallery-s3-i1\">Set your stake.</li><li data-component-item-id=\"doc-nimbus-component-gallery-s3-i2\">Start the round.</li><li data-component-item-id=\"doc-nimbus-component-gallery-s3-i3\">Cash out before the round ends.</li></ul></div>\n</div></section>"
+          },
+          {
+            "id": "doc-nimbus-component-gallery-s4",
+            "number": "4.0",
+            "slug": "table",
+            "title": "Table",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "Managed table with editable cells.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-component-gallery-s4\"><div class=\"container\"><div class=\"num\">4.0</div><h2>Table</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>Tables render headers and rows; each cell is editable inline.</p><div class=\"doc-component doc-component-table doc-component-variant-info\" data-doc-component=\"table\" data-component-id=\"doc-nimbus-component-gallery-s4-controls\" data-variant=\"info\" data-ordered=\"false\"><h4 class=\"doc-component-title\">Control Reference</h4><table><thead><tr><th>Control</th><th>Purpose</th><th>Note</th></tr></thead><tbody><tr data-component-row-id=\"doc-nimbus-component-gallery-s4-r1\"><td>Stake</td><td>Sets the wager.</td><td>Half / double / max shortcuts.</td></tr><tr data-component-row-id=\"doc-nimbus-component-gallery-s4-r2\"><td>Start</td><td>Begins a round.</td><td>Locks the stake.</td></tr><tr data-component-row-id=\"doc-nimbus-component-gallery-s4-r3\"><td>Cash Out</td><td>Takes the current multiplier.</td><td>Available until the round ends.</td></tr></tbody></table></div>\n</div></section>"
+          },
+          {
+            "id": "doc-nimbus-component-gallery-s5",
+            "number": "5.0",
+            "slug": "steps",
+            "title": "Steps",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "Ordered step-by-step flow.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-component-gallery-s5\"><div class=\"container\"><div class=\"num\">5.0</div><h2>Steps</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>Steps render as an ordered, numbered flow.</p><div class=\"doc-component doc-component-steps doc-component-variant-success\" data-doc-component=\"steps\" data-component-id=\"doc-nimbus-component-gallery-s5-flow\" data-variant=\"success\" data-ordered=\"true\"><h4 class=\"doc-component-title\">Round Flow</h4><ol class=\"steps\"><li data-component-item-id=\"doc-nimbus-component-gallery-s5-st1\"><strong class=\"doc-component-item-title\">Set the stake</strong><p class=\"doc-component-item-body\">Enter an amount or use the shortcuts.</p></li><li data-component-item-id=\"doc-nimbus-component-gallery-s5-st2\"><strong class=\"doc-component-item-title\">Start the round</strong><p class=\"doc-component-item-body\">The board locks and play begins.</p></li><li data-component-item-id=\"doc-nimbus-component-gallery-s5-st3\"><strong class=\"doc-component-item-title\">Cash out</strong><p class=\"doc-component-item-body\">Take the multiplier before the round ends.</p></li></ol></div>\n</div></section>"
+          },
+          {
+            "id": "doc-nimbus-component-gallery-s6",
+            "number": "6.0",
+            "slug": "regions",
+            "title": "Region List",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "Named screen regions.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-component-gallery-s6\"><div class=\"container\"><div class=\"num\">6.0</div><h2>Region List</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>A region list names the parts of a screen as term/description pairs.</p><dl class=\"doc-component doc-component-regions doc-component-variant-info ui-list\" data-doc-component=\"regions\" data-component-id=\"doc-nimbus-component-gallery-s6-screen\" data-variant=\"info\" data-ordered=\"false\"><dt class=\"doc-component-title\">Screen Regions</dt><div class=\"doc-region-row\" data-component-item-id=\"doc-nimbus-component-gallery-s6-rg1\"><dt class=\"doc-component-item-title\">Header bar</dt><dd class=\"doc-component-item-body\">Logo, clock, and balance.</dd></div><div class=\"doc-region-row\" data-component-item-id=\"doc-nimbus-component-gallery-s6-rg2\"><dt class=\"doc-component-item-title\">Control panel</dt><dd class=\"doc-component-item-body\">Stake, start, and cash-out controls.</dd></div><div class=\"doc-region-row\" data-component-item-id=\"doc-nimbus-component-gallery-s6-rg3\"><dt class=\"doc-component-item-title\">Main board</dt><dd class=\"doc-component-item-body\">The play area.</dd></div></dl>\n</div></section>"
+          },
+          {
+            "id": "doc-nimbus-component-gallery-s7",
+            "number": "7.0",
+            "slug": "accordion",
+            "title": "Accordion",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "Expandable FAQ accordion.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-component-gallery-s7\"><div class=\"container\"><div class=\"num\">7.0</div><h2>Accordion</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>An accordion collapses long Q&amp;A into expandable rows.</p><div class=\"doc-component doc-component-accordion doc-component-variant-note\" data-doc-component=\"accordion\" data-component-id=\"doc-nimbus-component-gallery-s7-faq\" data-variant=\"note\" data-ordered=\"false\"><h4 class=\"doc-component-title\">Frequently Asked</h4><details data-component-item-id=\"doc-nimbus-component-gallery-s7-q1\"><summary class=\"doc-component-item-title\">Can I cash out at any time?</summary><div class=\"doc-component-item-body\"><p>Yes, until the round ends.</p></div></details><details data-component-item-id=\"doc-nimbus-component-gallery-s7-q2\"><summary class=\"doc-component-item-title\">Is there an auto mode?</summary><div class=\"doc-component-item-body\"><p>Yes — see the Tabs section for Manual vs Auto.</p></div></details></div>\n</div></section>"
+          },
+          {
+            "id": "doc-nimbus-component-gallery-s8",
+            "number": "8.0",
+            "slug": "tabs",
+            "title": "Tabs",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "Tabbed panels.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-component-gallery-s8\"><div class=\"container\"><div class=\"num\">8.0</div><h2>Tabs</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>Tabs switch between panels in place.</p><div class=\"doc-component doc-component-tabs doc-component-variant-info\" data-doc-component=\"tabs\" data-component-id=\"doc-nimbus-component-gallery-s8-modes\" data-variant=\"info\" data-ordered=\"false\"><h4 class=\"doc-component-title\">Modes</h4><div class=\"doc-tabs\" role=\"tablist\"><button class=\"doc-tab active\" data-component-item-id=\"doc-nimbus-component-gallery-s8-manual\" role=\"tab\" aria-selected=\"true\">Manual</button><button class=\"doc-tab\" data-component-item-id=\"doc-nimbus-component-gallery-s8-auto\" role=\"tab\" aria-selected=\"false\">Auto</button></div><div class=\"doc-tab-panel\" data-for=\"doc-nimbus-component-gallery-s8-manual\" role=\"tabpanel\"><p class=\"doc-component-item-body\">You play each round by hand.</p></div><div class=\"doc-tab-panel\" data-for=\"doc-nimbus-component-gallery-s8-auto\" hidden role=\"tabpanel\"><p class=\"doc-component-item-body\">A configured selection runs automatically across rounds.</p></div></div>\n</div></section>"
+          },
+          {
+            "id": "doc-nimbus-component-gallery-s9",
+            "number": "9.0",
+            "slug": "carousel",
+            "title": "Image Carousel",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "Multi-image carousel.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-component-gallery-s9\"><div class=\"container\"><div class=\"num\">9.0</div><h2>Image Carousel</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>A carousel steps through several images in one slot.</p><div class=\"doc-component doc-component-carousel doc-component-variant-info\" data-doc-component=\"carousel\" data-component-id=\"doc-nimbus-component-gallery-s9-states\" data-variant=\"info\" data-ordered=\"false\"><h4 class=\"doc-component-title\">Round States</h4><div class=\"doc-carousel\" data-doc-carousel><button type=\"button\" class=\"doc-carousel-nav prev\" data-carousel-prev aria-label=\"Previous slide\">‹</button><div class=\"doc-carousel-viewport\"><div class=\"doc-carousel-track\"><figure class=\"doc-carousel-slide\" data-component-item-id=\"doc-nimbus-component-gallery-s9-sl1\" data-slide-index=\"0\"><img src=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgNjQwIDQwMCI+PHJlY3Qgd2lkdGg9IjY0MCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiMxZjI5MzMiLz48cmVjdCB4PSIxNiIgeT0iMTYiIHdpZHRoPSI2MDgiIGhlaWdodD0iMzY4IiByeD0iMTQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLW9wYWNpdHk9IjAuMjUiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjMyMCIgeT0iMjAwIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI2MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkdhbWUgU2NyZWVuPC90ZXh0Pjx0ZXh0IHg9IjMyMCIgeT0iMjQ4IiBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjAuNyIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj5EZW1vIHBsYWNlaG9sZGVyPC90ZXh0Pjwvc3ZnPg==\" alt=\"Default game screen\" draggable=\"false\"><figcaption class=\"doc-component-item-title\">Default</figcaption></figure><figure class=\"doc-carousel-slide\" data-component-item-id=\"doc-nimbus-component-gallery-s9-sl2\" data-slide-index=\"1\"><img src=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgNjQwIDQwMCI+PHJlY3Qgd2lkdGg9IjY0MCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiMxZDZmNDIiLz48cmVjdCB4PSIxNiIgeT0iMTYiIHdpZHRoPSI2MDgiIGhlaWdodD0iMzY4IiByeD0iMTQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLW9wYWNpdHk9IjAuMjUiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjMyMCIgeT0iMjAwIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI2MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPldpbiBTdGF0ZTwvdGV4dD48dGV4dCB4PSIzMjAiIHk9IjI0OCIgZmlsbD0iI2ZmZmZmZiIgZmlsbC1vcGFjaXR5PSIwLjciIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSI+RGVtbyBwbGFjZWhvbGRlcjwvdGV4dD48L3N2Zz4=\" alt=\"Win state\" loading=\"lazy\" draggable=\"false\"><figcaption class=\"doc-component-item-title\">Win</figcaption></figure><figure class=\"doc-carousel-slide\" data-component-item-id=\"doc-nimbus-component-gallery-s9-sl3\" data-slide-index=\"2\"><img src=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgNjQwIDQwMCI+PHJlY3Qgd2lkdGg9IjY0MCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiM3YTIyMzAiLz48cmVjdCB4PSIxNiIgeT0iMTYiIHdpZHRoPSI2MDgiIGhlaWdodD0iMzY4IiByeD0iMTQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLW9wYWNpdHk9IjAuMjUiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjMyMCIgeT0iMjAwIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI2MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlJvdW5kIE92ZXI8L3RleHQ+PHRleHQgeD0iMzIwIiB5PSIyNDgiIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC43IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkRlbW8gcGxhY2Vob2xkZXI8L3RleHQ+PC9zdmc+\" alt=\"Round over\" loading=\"lazy\" draggable=\"false\"><figcaption class=\"doc-component-item-title\">Round over</figcaption></figure></div></div><button type=\"button\" class=\"doc-carousel-nav next\" data-carousel-next aria-label=\"Next slide\">›</button><div class=\"doc-carousel-dots\"><button type=\"button\" class=\"doc-carousel-dot active\" data-carousel-dot=\"0\" aria-label=\"Go to Default\" aria-pressed=\"true\"></button><button type=\"button\" class=\"doc-carousel-dot\" data-carousel-dot=\"1\" aria-label=\"Go to Win\" aria-pressed=\"false\"></button><button type=\"button\" class=\"doc-carousel-dot\" data-carousel-dot=\"2\" aria-label=\"Go to Round over\" aria-pressed=\"false\"></button></div></div></div>\n</div></section>"
+          },
+          {
+            "id": "doc-nimbus-component-gallery-s10",
+            "number": "10.0",
+            "slug": "figures",
+            "title": "Figures & Markers",
+            "status": "published",
+            "owner": "Docs",
+            "summary": "Plain figure and annotated figure with markers.",
+            "html": "<div class=\"section-banner\" id=\"doc-nimbus-component-gallery-s10\"><div class=\"container\"><div class=\"num\">10.0</div><h2>Figures & Markers</h2></div></div><section class=\"content\"><div class=\"container\">\n<p>A plain figure pairs an image with a caption:</p><figure class=\"figure\"><img src=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgNjQwIDQwMCI+PHJlY3Qgd2lkdGg9IjY0MCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiMyMzMwNGEiLz48cmVjdCB4PSIxNiIgeT0iMTYiIHdpZHRoPSI2MDgiIGhlaWdodD0iMzY4IiByeD0iMTQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLW9wYWNpdHk9IjAuMjUiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjMyMCIgeT0iMjAwIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI2MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPk1haW4gQm9hcmQ8L3RleHQ+PHRleHQgeD0iMzIwIiB5PSIyNDgiIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC43IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkRlbW8gcGxhY2Vob2xkZXI8L3RleHQ+PC9zdmc+\" alt=\"Nimbus main board placeholder\" loading=\"lazy\"><figcaption><em>The main board, shown with placeholder art.</em></figcaption></figure><p>An annotated figure overlays markers on the image, each described below it:</p><figure class=\"figure annotated-figure\"><div class=\"annotated-image\"><img src=\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgNjQwIDQwMCI+PHJlY3Qgd2lkdGg9IjY0MCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiMxZjI5MzMiLz48cmVjdCB4PSIxNiIgeT0iMTYiIHdpZHRoPSI2MDgiIGhlaWdodD0iMzY4IiByeD0iMTQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLW9wYWNpdHk9IjAuMjUiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjMyMCIgeT0iMjAwIiBmaWxsPSIjZmZmZmZmIiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMzQiIGZvbnQtd2VpZ2h0PSI2MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkdhbWUgU2NyZWVuPC90ZXh0Pjx0ZXh0IHg9IjMyMCIgeT0iMjQ4IiBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjAuNyIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj5EZW1vIHBsYWNlaG9sZGVyPC90ZXh0Pjwvc3ZnPg==\" alt=\"Default game screen with markers\"><span class=\"doc-marker marker-shape\" data-kind=\"shape\" data-marker-id=\"doc-nimbus-component-gallery-s10-m1\" data-label=\"Stake\" style=\"left:18%; top:60%; width:20%; height:12%; border-color:#7aa3d6; background-color:#7aa3d6; color:#ffffff;\"><b class=\"doc-marker-chip\">Stake</b></span><span class=\"doc-marker marker-link\" data-kind=\"link\" data-marker-id=\"doc-nimbus-component-gallery-s10-m2\" data-target=\"#doc-nimbus-component-gallery-s8\" data-label=\"Modes\" style=\"left:60%; top:20%; width:22%; height:12%; border-color:#63cdff; background-color:#63cdff; color:#0b1722;\"><b class=\"doc-marker-chip\">Modes →</b></span></div><div class=\"marker-description-list\"><div class=\"marker-description\" data-marker-description-index=\"1\"><strong>Stake</strong><p>The wager input and quick controls.</p></div><div class=\"marker-description\" data-marker-description-index=\"2\"><strong>Modes</strong><p>Link marker — jumps to the Tabs section.</p></div></div><figcaption><em>Default screen with a shape marker and a link marker.</em></figcaption></figure>\n</div></section>"
+          }
+        ]
+      }
+    }
+  }
 }

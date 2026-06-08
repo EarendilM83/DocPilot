@@ -109,20 +109,81 @@ export function authLogin(args: LoginArgs): Promise<AuthSessionResponse> {
   return apiFetch<AuthSessionResponse>('/api/v2/auth/login', {
     method: 'POST',
     body: JSON.stringify(args),
+  }).then((res) => {
+    invalidateAuthSession();
+    return res;
   });
 }
 
 export function authLogout(): Promise<{ ok: true }> {
-  return apiFetch<{ ok: true }>('/api/v2/auth/logout', { method: 'POST' });
+  return apiFetch<{ ok: true }>('/api/v2/auth/logout', { method: 'POST' }).then((res) => {
+    invalidateAuthSession();
+    return res;
+  });
 }
 
 export function authMe(): Promise<AuthSessionResponse> {
   return apiFetch<AuthSessionResponse>('/api/v2/auth/me');
 }
 
+// ─── Shared session lookup ─────────────────────────────────────────────────
+// Several components need the session on mount (auth gate, reader chrome,
+// account-manager card, admin context strip …). Each used to fire its own
+// /auth/me — six requests per doc page. Share one in-flight promise plus a
+// short-lived result instead. Login/logout invalidate the cache. Network
+// errors (fetch TypeError — NOT an ApiError like 401) are retried with a
+// short backoff before the failure surfaces; failures are never cached.
+
+const AUTH_ME_TTL_MS = 60_000;
+let authMeCache: { at: number; promise: Promise<AuthSessionResponse> } | null = null;
+
+async function authMeWithRetry(retries = 2): Promise<AuthSessionResponse> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await authMe();
+    } catch (err) {
+      // An ApiError means the server answered (e.g. 401) — that's a real
+      // verdict, don't retry. Only retry genuine network failures.
+      if (err instanceof ApiError || attempt >= retries) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+    }
+  }
+}
+
+export function invalidateAuthSession(): void {
+  authMeCache = null;
+}
+
+export function authMeCached(): Promise<AuthSessionResponse> {
+  if (authMeCache && Date.now() - authMeCache.at < AUTH_ME_TTL_MS) {
+    return authMeCache.promise;
+  }
+  const entry: { at: number; promise: Promise<AuthSessionResponse> } = {
+    at: Date.now(),
+    promise: authMeWithRetry().catch((err) => {
+      // Don't cache failures past the shared in-flight window — the next
+      // caller should hit the network again.
+      if (authMeCache === entry) authMeCache = null;
+      throw err;
+    }),
+  };
+  authMeCache = entry;
+  return entry.promise;
+}
+
 export function publicCompanyBySlug(slug: string): Promise<{ company: PublicCompany }> {
   return apiFetch<{ company: PublicCompany }>(
     `/api/v2/public/companies/${encodeURIComponent(slug)}/branding`,
+  );
+}
+
+// Owning company for a doc (by reader slug or document id) — used to route
+// an anonymous deep link to the right tenant login.
+export function publicDocCompany(
+  slugOrId: string,
+): Promise<{ company: { slug: string; name: string } }> {
+  return apiFetch<{ company: { slug: string; name: string } }>(
+    `/api/v2/public/docs/${encodeURIComponent(slugOrId)}/company`,
   );
 }
 

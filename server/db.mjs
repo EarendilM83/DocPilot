@@ -35,6 +35,30 @@ ensureColumn('users', 'account_manager_user_id', 'account_manager_user_id TEXT R
 ensureColumn('users', 'staging_card_enabled', 'staging_card_enabled INTEGER NOT NULL DEFAULT 1');
 db.exec('CREATE INDEX IF NOT EXISTS idx_users_account_manager ON users(account_manager_user_id)');
 
+// Slug aliases — when a company slug is renamed, the old slug keeps working
+// via redirect instead of dead-ending (migration-era random slugs live on in
+// bookmarks and the printed credentials sheet).
+db.exec(`CREATE TABLE IF NOT EXISTS company_slug_aliases (
+  old_slug TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL
+)`);
+
+// Backfill a known migration-era slug alias when configured via env.
+// Set LEGACY_SLUG_ALIAS (the old slug) + LEGACY_COMPANY_SLUG (its current slug)
+// to map an old bookmarked slug to a company. Idempotent; skipped if unset or the
+// company doesn't exist. Tenant-specific values live in deployment env, not code.
+if (process.env.LEGACY_SLUG_ALIAS && process.env.LEGACY_COMPANY_SLUG) {
+  const company = db
+    .prepare('SELECT id FROM companies WHERE slug = ?')
+    .get(process.env.LEGACY_COMPANY_SLUG);
+  if (company) {
+    db.prepare(
+      'INSERT OR IGNORE INTO company_slug_aliases (old_slug, company_id, created_at) VALUES (?, ?, ?)',
+    ).run(process.env.LEGACY_SLUG_ALIAS, company.id, new Date().toISOString());
+  }
+}
+
 export function nowIso() {
   return new Date().toISOString();
 }

@@ -1,11 +1,1 @@
-[
-  {
-    "id": "docpilot-demo",
-    "name": "DocPilot Demo",
-    "studio": "DocPilot",
-    "status": "published",
-    "description": "Self-documenting demo product. The Welcome doc itself is the tour.",
-    "version": "1.0.0",
-    "updatedAt": "2026-06-04"
-  }
-]
+[]

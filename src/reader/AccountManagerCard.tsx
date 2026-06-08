@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { authMeCached } from '../multitenant/api';
 
 type AccountManager = {
   id: string;
@@ -18,11 +19,10 @@ export function AccountManagerCard() {
     let cancelled = false;
     // The session cookie is HttpOnly, so JS can't pre-flight; just call
     // authMe and rely on the browser to attach the cookie when present.
+    // authMeCached shares one round-trip with the gate and reader chrome.
     (async () => {
       try {
-        const res = await fetch('/api/v2/auth/me', { credentials: 'include' });
-        if (!res.ok || cancelled) { setLoaded(true); return; }
-        const data = await res.json();
+        const data = await authMeCached();
         if (cancelled) return;
         if (data?.user?.accountManager) setAm(data.user.accountManager);
       } catch {

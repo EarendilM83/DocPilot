@@ -1,7 +1,7 @@
-const PREFIX = 'aviator_admin_';
+const PREFIX = 'docpilot_admin_';
 const USERS_KEY = `${PREFIX}users_v1`;
-const SESSION_KEY = 'aviator_admin_session_user';
-const LEGACY_SESSION_KEY = 'aviator_admin_session';
+const SESSION_KEY = 'docpilot_admin_session_user';
+const LEGACY_SESSION_KEY = 'docpilot_admin_session';
 const MIGRATION_REPORT_KEY = `${PREFIX}migration_report_v1`;
 const API_BASE = (import.meta.env.VITE_DOCPILOT_API_BASE || '/api/docpilot').replace(/\/$/, '');
 
@@ -281,6 +281,33 @@ export const auth = {
   },
 };
 
+// Keys whose server value has been fetched this session. Writing a key
+// BEFORE it hydrates would persist state derived from code defaults and
+// clobber the server value (verified data loss: a doc delete fired before
+// hydration wiped every doc/section not present in the defaults).
+const hydratedKeys = new Set<string>();
+// Pure preference keys carry the user's explicit new choice (not state
+// derived from a possibly-unhydrated collection), so writing them early is
+// harmless — and blocking them freezes basic UI like the product filter.
+const PREHYDRATION_SAFE_KEYS = new Set([
+  'cms_selected_product_v1',
+  'cms_active_theme_preset_v1',
+  'cms_marker_color_presets_v1',
+]);
+
+// Exposed for useStoredState: whole-collection writes must additionally be
+// gated PER COMPONENT INSTANCE. The global hydratedKeys set is not enough —
+// when a large value can't be cached in localStorage (quota), a component
+// mounted later initialises from code defaults while the key already counts
+// as hydrated globally, and its first save clobbers the server value.
+export function isPrehydrationSafeKey(key: string) {
+  return PREHYDRATION_SAFE_KEYS.has(key);
+}
+
+export function notifyBlockedWrite(message: string) {
+  notifyPersistenceError(message);
+}
+
 export const store = {
   get<T>(key: string, fallback: T): T {
     try {
@@ -303,6 +330,7 @@ export const store = {
           // server value, skip the local cache. Server remains source of truth.
           try { localStorage.removeItem(PREFIX + key); } catch { /* ignore */ }
         }
+        hydratedKeys.add(key);
         return remote.value as T;
       }
 
@@ -313,6 +341,7 @@ export const store = {
 
       const seed = local.hadRaw && local.valid ? local.value : fallback;
       await persistValue(key, seed, local.valid ? 'import_local_prototype' : 'seed_default');
+      hydratedKeys.add(key);
       return seed;
     } catch {
       setPersistenceStatus('offline');
@@ -322,6 +351,10 @@ export const store = {
   set<T>(key: string, value: T) {
     if (persistenceStatus !== 'server') {
       notifyPersistenceError('Server persistence is unavailable. Changes were blocked to avoid local-only saves.');
+      return false;
+    }
+    if (!hydratedKeys.has(key) && !PREHYDRATION_SAFE_KEYS.has(key)) {
+      notifyPersistenceError('Still loading the latest data from the server — please retry in a moment.');
       return false;
     }
     if (!canCurrentUserWriteKey(key)) {

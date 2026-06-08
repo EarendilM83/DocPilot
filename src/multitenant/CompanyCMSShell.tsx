@@ -21,7 +21,7 @@ type Phase =
   | { kind: 'denied'; reason: string }
   | { kind: 'ready'; user: AuthUser; company: PublicCompany };
 
-const LEGACY_SESSION_FLAG = 'aviator_admin_session';
+const LEGACY_SESSION_FLAG = 'docpilot_admin_session';
 
 function setLegacyAdminSession() {
   try {
@@ -34,7 +34,7 @@ function setLegacyAdminSession() {
 function clearLegacyAdminSession() {
   try {
     window.sessionStorage.removeItem(LEGACY_SESSION_FLAG);
-    window.sessionStorage.removeItem('aviator_admin_session_user');
+    window.sessionStorage.removeItem('docpilot_admin_session_user');
   } catch {
     // ignore
   }

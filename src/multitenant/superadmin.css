@@ -642,7 +642,7 @@
   font-size: 11px;
   font-weight: 800;
   /* Dark text on the tenant's accent color. The "accent" is by convention
-     a lighter highlight tone (e.g. aviator picks #63cdff), so white text
+     a lighter highlight tone (e.g. a bright accent like #63cdff), so white text
      reduces to contrast ratio < 2 — invisible. Dark text reads well across
      the realistic accent palette tenants use. */
   color: var(--c-eerie-black, #11151c);

@@ -289,6 +289,16 @@
   line-height: 1.5;
 }
 
+.company-landing-missing-home {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* ---------- Client area ---------- */
 
 .company-client-shell {
@@ -1947,3 +1957,13 @@
   background: transparent; color: #475569; border: 1px solid #cbd5e1;
 }
 .app-view .landing-editor-footer .btn-outline:hover { border-color: #c81420; color: #c81420; }
+
+/* QA (qa-admin §7): tables must scroll horizontally on narrow viewports
+   instead of crushing 7 columns into per-character vertical wraps. */
+.tenant-users-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 900px) {
+  .tenant-users-table th,
+  .tenant-users-table td { white-space: nowrap; }
+}
+/* The green status pill wrapped 'activ/e' to two lines even at 1440. */
+.tenant-users-status { white-space: nowrap; }

@@ -176,6 +176,7 @@ function UsersTab({ companyId, currentUserId }: { companyId: string; currentUser
   }
 
   async function toggleStatus(user: TenantUser) {
+    if (user.id === currentUserId) return; // disabling yourself is an instant lockout
     const next = user.status === 'active' ? 'disabled' : 'active';
     try { await api(`/api/v2/companies/${companyId}/users/${user.id}`, { method: 'PUT', body: JSON.stringify({ status: next }) }); await reload(); }
     catch (e) { setErr(e instanceof Error ? e.message : 'Update failed.'); }
@@ -236,7 +237,7 @@ function UsersTab({ companyId, currentUserId }: { companyId: string; currentUser
                 <td>{u.status}</td>
                 <td>{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'never'}</td>
                 <td>
-                  <button type="button" onClick={() => toggleStatus(u)}>{u.status === 'active' ? 'Disable' : 'Enable'}</button>
+                  {u.id !== currentUserId && <button type="button" onClick={() => toggleStatus(u)}>{u.status === 'active' ? 'Disable' : 'Enable'}</button>}
                   {u.id !== currentUserId && <button type="button" onClick={() => deleteUser(u.id)} className="danger">Delete</button>}
                 </td>
               </tr>

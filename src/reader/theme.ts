@@ -48,13 +48,14 @@ export function applyReaderTheme(
   theme: ReaderTheme,
   sessionMode?: ReaderMode,
   matchMedia: typeof window.matchMedia = RESOLVED_MATCH_MEDIA,
-): void {
+): ReaderMode {
   const effective: ReaderMode = sessionMode
     ?? (theme.defaultMode === 'system'
         ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
         : theme.defaultMode);
   root.dataset.theme = effective;
   root.style.setProperty('--accent', theme.accent);
+  return effective;
 }
 
 export function loadSessionMode(slug: string | null | undefined): ReaderMode | null {

@@ -859,7 +859,7 @@ function ClientAreaBody({
                     type="url"
                     value={content.stagingUrl}
                     onChange={(e) => onContentChange({ ...content, stagingUrl: e.target.value })}
-                    placeholder="https://staging.aviator.studio"
+                    placeholder="https://staging.example.com"
                   />
                 </label>
               </div>

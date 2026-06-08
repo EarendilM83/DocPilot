@@ -27,3 +27,6 @@ dist-ssr
 *.sw?
 
 .superpowers/
+
+# Playwright
+test-results/

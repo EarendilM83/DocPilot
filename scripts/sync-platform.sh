@@ -49,11 +49,18 @@ EXCLUDES=(
   "DEPLOY.md"
   "RESTART.md"
   "BATCAVE.md"
-  # Aviator content-seeding + probe scripts.
+  # Aviator content-seeding + probe + tenant-fixtured dev scripts.
   "scripts/seed-minescape/"
   "scripts/probe-aviator-users.mjs"
-  # Internal planning / Batcave config.
+  "scripts/browser-smoke.mjs"
+  "scripts/contrast-sweep.mjs"
+  "scripts/probe-create-user-modal.mjs"
+  # Tenant-fixtured e2e tests (hit /c/aviator + Minescape docs). Unit tests in src/ still sync.
+  "tests/"
+  # Internal planning / Batcave / local-agent config.
   ".batcave/"
+  ".batcave.json"
+  ".claude/"
   "docs/"
 )
 

@@ -174,6 +174,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--c-mid-blue); box
 .persistence-status.checking { border-left-color: #e5a500; }
 .persistence-blocker code { background: #f2f6f9; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
 .admin-context-bar { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 10px; margin: 0 0 18px; }
+/* QA (qa-admin §7): at 390 the 4-up strip clipped off-screen — wrap instead. */
+@media (max-width: 760px) { .admin-context-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .admin-context-bar { grid-template-columns: 1fr; } }
 .admin-context-bar > div { display: grid; gap: 3px; background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; box-shadow: 0 6px 16px rgba(25,25,25,.04); }
 .admin-context-bar span { color: #687581; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .admin-context-bar strong { color: var(--c-eerie-black); font-family: var(--font-display); font-size: 14px; line-height: 1.2; }
@@ -678,7 +681,21 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 @media (max-width: 820px) {
   .landing-grid, .app-layout, .form-grid { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; }
+  /* QA (qa-admin §7): on mobile the nav became a clipped row with
+     unreachable destinations — render it as a horizontally scrollable
+     strip instead. */
+  .sidebar {
+    position: static;
+    height: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 12px;
+  }
+  .sidebar-section { display: none; }
+  .nav-link { flex: 0 0 auto; min-height: 40px; margin: 0; white-space: nowrap; }
   .content { padding: 22px; }
   .field.wide { grid-column: auto; }
   .cms-doc-cover, .cms-section-banner, .cms-section-edit-banner, .cms-section-body { padding-left: 24px; padding-right: 24px; }
@@ -721,7 +738,7 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
 .manual-html * { box-sizing: border-box; }
 
   :root {
-    /* Aviator brandbook colors */
+    /* Brand colors */
     --sky-blue: #63cdff;
     --red: #ff1b23;
     --eerie-black: #191919;
@@ -925,7 +942,9 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
     border-radius: 3px;
   }
 
-  /* Step blocks */
+  /* Step blocks — numbered procedure timeline: round badge + connector
+     line, title beside the badge, description indented beneath it. Shared
+     by the editor preview and the reader (theme via --steps-* vars). */
   .steps {
     counter-reset: step;
     list-style: none;
@@ -934,31 +953,50 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
   }
   .steps li {
     counter-increment: step;
-    background: var(--pale-grey);
-    border-left: 4px solid var(--mid-blue);
-    padding: 14px 18px 14px 56px;
-    margin-bottom: 10px;
+    background: transparent;
+    border: 0;
+    padding: 0 0 20px 46px;
+    margin: 0;
     position: relative;
-    border-radius: 0 4px 4px 0;
+    border-radius: 0;
   }
+  .steps li:last-child { padding-bottom: 0; }
   .steps li::before {
-    content: counter(step, decimal-leading-zero);
+    content: counter(step);
     position: absolute;
-    left: 14px;
-    top: 14px;
-    width: 32px;
-    height: 32px;
-    background: var(--red);
+    left: 0;
+    top: 0;
+    width: 30px;
+    height: 30px;
+    background: var(--steps-badge-bg, var(--red));
     color: #fff;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: var(--serif);
     font-weight: 700;
-    font-size: 13px;
+    font-size: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
   }
-  .steps li strong { display: block; margin-bottom: 2px; }
+  /* connector between badges */
+  .steps li::after {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 36px;
+    bottom: 6px;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--steps-connector, #dde3ea);
+  }
+  .steps li:last-child::after { display: none; }
+  .steps li strong {
+    display: block;
+    font-size: 15px;
+    line-height: 30px; /* vertically centers the title against the badge */
+    margin-bottom: 2px;
+  }
+  .steps li p { margin: 0; }
 
   /* Callouts */
   .callout {
@@ -3211,7 +3249,11 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
   overflow: auto;
 }
 .doc-mini-card {
-  grid-template-columns: minmax(88px, .35fr) minmax(0, 1fr) auto;
+  /* The meta column was `auto`: its long content (version · sections ·
+     audience) took full width and starved the title column to ~1ch,
+     wrapping every stream title into a vertical letter stack. Share the
+     space and ellipsize instead. */
+  grid-template-columns: minmax(72px, auto) minmax(0, 1.4fr) minmax(0, 1fr);
   align-items: center;
   padding: 14px;
   box-shadow: none;
@@ -3219,11 +3261,24 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
 .doc-mini-card strong,
 .doc-mini-card em {
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .doc-mini-card em {
   color: #6f7b86;
   font-style: normal;
   font-size: 13px;
+}
+@media (max-width: 640px) {
+  .doc-mini-card {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .doc-mini-card strong,
+  .doc-mini-card em {
+    white-space: normal;
+  }
 }
 .progress-row {
   display: grid;
@@ -4285,8 +4340,12 @@ button:disabled {
   gap: 8px;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, .05);
-  border-color: rgba(255, 255, 255, .1);
+  /* QA (qa-admin §7): the pill kept white value text from the dark-cover
+     design — on light covers the values were invisible and read as
+     label/value "overlap". A solid dark pill guarantees contrast on any
+     cover background. */
+  background: rgba(15, 17, 21, .78);
+  border-color: rgba(15, 17, 21, .25);
 }
 .cover.cover-slim .cover-meta .label {
   font-size: 10px;
@@ -6952,7 +7011,7 @@ table.data {
   }
 }
 
-/* === Minescape doc audit fixes (2026-05-31) === */
+/* === Doc audit fixes (2026-05-31) === */
 
 /* 1. Section 3 table overflow — fixed table layout + column widths */
 .manual-html section.content table {
@@ -7148,4 +7207,60 @@ table.data {
   .doc-component-regions .doc-region-row dd {
     padding-top: 0;
   }
+}
+
+/* Dice feature row — illustration sits INSIDE the "Why the dice exists"
+   card, anchored to its top-right corner; the list text keeps clear of it.
+   (legacy tab markup). Used by both the reader and the editor preview. */
+.dice-feature-row {
+  position: relative;
+  display: block;
+  margin: 16px 0;
+}
+.dice-feature-row .dice-illustration {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 72px;
+  height: 72px;
+  z-index: 1;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.18));
+}
+.dice-feature-row .dice-feature-body {
+  width: 100%;
+  min-width: 0;
+}
+.dice-feature-row .dice-feature-body .doc-component {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.dice-feature-row .dice-feature-body .doc-component-title,
+.dice-feature-row .dice-feature-body ul {
+  padding-right: 112px;
+}
+@media (max-width: 600px) {
+  .dice-feature-row .dice-illustration { width: 52px; height: 52px; top: 14px; right: 14px; }
+  .dice-feature-row .dice-feature-body .doc-component-title,
+  .dice-feature-row .dice-feature-body ul { padding-right: 76px; }
+}
+
+/* QA (qa-admin §7): the products table (and any table.data) crushed all
+   columns into per-character vertical wraps at <=768. Scroll horizontally
+   instead, keeping column widths. */
+@media (max-width: 900px) {
+  table.data {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table.data th,
+  table.data td {
+    white-space: nowrap;
+  }
+}
+
+.translation-pagination {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 4px;
 }

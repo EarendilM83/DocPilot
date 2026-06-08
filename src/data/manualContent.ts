@@ -1,7 +1,7 @@
-// Manual content lives in the private content overlay, not in the platform repo.
-// See docpilot-content-aviator/data/manualContent.ts.
-
-export type ManualSection = { id: string; slug: string; number: string; title: string; html: string };
-
-export const manualHtml = '';
-export const manualSections: ManualSection[] = [];
+// Generic placeholder manual overlay for the public (content-agnostic) build.
+// Real tenant manuals live in each deployment's own overlay + persisted CMS state.
+export const manualHtml = "";
+export const manualSections: Array<{
+  id: string; number: string; title: string; slug: string;
+}> = [];
+export const manualFigureCount = 0;

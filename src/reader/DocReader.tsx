@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { setGlobalTheme } from '@atlaskit/tokens';
+import { authMeCached } from '../multitenant/api';
+import { attachDocComponentInteractions } from '../shared/docInteractions';
 import { useDocReaderState } from './useDocReaderState';
 import { applyReaderTheme, loadSessionMode, resolveReaderTheme, saveSessionMode } from './theme';
 import { Drawer } from './Drawer';
@@ -86,15 +89,13 @@ export function DocReader({ resolveDoc }: DocReaderProps) {
 
   // Pull the logged-in user's company so the brand link lands on the
   // company documentation hub (/c/<slug>) instead of the marketing
-  // landing. Same call AccountManagerCard relies on; the response is
-  // small and the browser caches it.
+  // landing. authMeCached shares one /auth/me round-trip with the auth
+  // gate and the account-manager card.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/v2/auth/me', { credentials: 'include' });
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
+        const data = await authMeCached();
         if (cancelled) return;
         if (data?.company?.slug) {
           setSessionCompany({ slug: data.company.slug, name: data.company.name ?? data.company.slug });
@@ -130,41 +131,50 @@ export function DocReader({ resolveDoc }: DocReaderProps) {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  // Shared wiring with the admin editor preview: tabs (both markup eras),
+  // carousels, and marker hotspots. Without this the components rendered via
+  // dangerouslySetInnerHTML are completely inert in the reader.
+  // Re-attach when section content changes — sections hydrate from the server
+  // after first paint, and carousels/markers must see the final DOM.
+  const sectionsFingerprint = useMemo(
+    () => (model ? model.sections.map((s) => `${s.id}:${s.html.length}`).join('|') : ''),
+    [model],
+  );
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    function onClick(e: MouseEvent) {
-      const target = e.target as HTMLElement | null;
-      const tab = target?.closest<HTMLElement>('.doc-tab');
-      if (!tab) return;
-      const list = tab.closest<HTMLElement>('.doc-tabs, .doc-tab-list');
-      const wrap = tab.closest<HTMLElement>('.doc-component-tabs');
-      if (!list || !wrap) return;
-      const itemId = tab.getAttribute('data-component-item-id');
-      if (!itemId) return;
-      list.querySelectorAll<HTMLElement>('.doc-tab').forEach((b) => {
-        const on = b === tab;
-        b.classList.toggle('active', on);
-        b.setAttribute('aria-selected', on ? 'true' : 'false');
-      });
-      wrap.querySelectorAll<HTMLElement>('.doc-tab-panel').forEach((panel) => {
-        const matches = panel.getAttribute('data-for') === itemId
-          || panel.getAttribute('data-component-item-id') === itemId;
-        if (matches) panel.removeAttribute('hidden');
-        else panel.setAttribute('hidden', '');
-      });
-    }
-    root.addEventListener('click', onClick);
-    return () => root.removeEventListener('click', onClick);
-  }, [model?.doc.id]);
+    return attachDocComponentInteractions(root);
+  }, [model?.doc.id, sectionsFingerprint]);
+
+  // Deep-link #hash scroll — the auth gate and section hydration land after
+  // first paint, so the browser's native anchor scroll finds no target.
+  // Scroll once the element exists; never again after that (don't yank the
+  // user back if content keeps hydrating after they scrolled away).
+  const didHashScroll = useRef(false);
+  useEffect(() => {
+    if (didHashScroll.current) return;
+    const hash = decodeURIComponent(window.location.hash.slice(1));
+    if (!hash) return;
+    const el = document.getElementById(hash);
+    if (!el) return;
+    didHashScroll.current = true;
+    el.scrollIntoView();
+  }, [sectionsFingerprint]);
 
   const slugForTheme = model?.company?.slug ?? model?.product?.slug ?? 'default';
 
   useEffect(() => {
     if (!rootRef.current || !model) return;
     const theme = resolveReaderTheme(model.themePreset, model.company);
-    const session = loadSessionMode(slugForTheme);
-    applyReaderTheme(rootRef.current, theme, session ?? undefined);
+    // ?previewTheme=dark|light forces a mode for this view — used by the
+    // editor's "preview in reader" links so authors can check both themes
+    // before publishing without touching their own saved preference.
+    const previewParam = new URLSearchParams(window.location.search).get('previewTheme');
+    const previewTheme = previewParam === 'dark' || previewParam === 'light' ? previewParam : null;
+    const session = previewTheme ?? loadSessionMode(slugForTheme);
+    const effective = applyReaderTheme(rootRef.current, theme, session ?? undefined);
+    // Keep the global ADS color mode in lockstep so --ds-* tokens flip too.
+    void setGlobalTheme({ colorMode: effective });
     // intentionally NOT depending on slugForTheme/session — first paint only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model?.doc.id]);
@@ -174,6 +184,7 @@ export function DocReader({ resolveDoc }: DocReaderProps) {
     const current = rootRef.current.dataset.theme === 'dark' ? 'dark' : 'light';
     const next = current === 'dark' ? 'light' : 'dark';
     rootRef.current.dataset.theme = next;
+    void setGlobalTheme({ colorMode: next });
     saveSessionMode(slugForTheme, next);
   }, [slugForTheme]);
 

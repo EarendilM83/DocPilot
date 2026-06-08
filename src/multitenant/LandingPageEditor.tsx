@@ -209,7 +209,7 @@ export default function LandingPageEditor({ companySlug, toast }: Props): JSX.El
               type="text"
               value={content.welcomeKicker}
               onChange={(e) => setContent({ ...content, welcomeKicker: e.target.value })}
-              placeholder="Aviator Studio client area"
+              placeholder="Studio client area"
             />
           </label>
           <label className="landing-editor-field">
@@ -252,7 +252,7 @@ export default function LandingPageEditor({ companySlug, toast }: Props): JSX.El
                 type="url"
                 value={content.stagingUrl}
                 onChange={(e) => setContent({ ...content, stagingUrl: e.target.value })}
-                placeholder="https://staging.aviator.studio"
+                placeholder="https://staging.example.com"
               />
             </label>
           </div>

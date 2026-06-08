@@ -39,4 +39,4 @@ Examples:
 - [ ] `npm run lint` passes
 - [ ] `npm run build` succeeds
 - [ ] No new console errors / warnings in browser DevTools
-- [ ] Touches platform code only? (If you touched `content/`, `src/data/manualContent.ts`, `server/seed-state.json`, or `public/images/{minescape,backoffice,manual}/`, this PR is going to the wrong repo — those are private-overlay paths.)
+- [ ] Touches platform code only? (If you touched `content/`, `src/data/manualContent.ts`, `server/seed-state.json`, or `public/images/{the sample product,backoffice,manual}/`, this PR is going to the wrong repo — those are private-overlay paths.)

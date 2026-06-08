@@ -159,6 +159,13 @@ export default function CompanyLanding(): JSX.Element {
     [company, email, password, submitting],
   );
 
+  // Renamed slug resolved via server alias — the payload carries the current
+  // canonical slug. Move the browser there (keeping ?returnTo etc.) so old
+  // bookmarks and the printed credentials sheet keep working.
+  if (company && slug && company.slug !== slug) {
+    return <Navigate to={`/c/${company.slug}${location.search}`} replace />;
+  }
+
   // Already authenticated and we have a returnTo (e.g. the user was
   // bounced here by the doc auth gate) — head straight to the original
   // destination instead of rendering the client area.
@@ -192,6 +199,7 @@ export default function CompanyLanding(): JSX.Element {
             accessible. If you believe this is a mistake, please contact the
             person who shared this link with you.
           </p>
+          <a className="company-landing-missing-home" href="/">Go to DocPilot home</a>
         </div>
       </div>
     );

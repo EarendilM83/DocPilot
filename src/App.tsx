@@ -10,7 +10,8 @@ import defaultdocsJson from '../content/docs.json' with { type: 'json' };
 import customSectionsJson from '../content/custom-sections.json' with { type: 'json' };
 import backofficeSectionArgsJson from '../content/sections/backoffice.json' with { type: 'json' };
 import integrationSectionArgsJson from '../content/sections/integration.json' with { type: 'json' };
-import { auth, canRoleWrite, store } from './storage';
+import { attachDocCarouselInteractions, attachDocTabInteractions, attachMarkerHotspotInteractions, clampBetween, clampPct, readPctData } from './shared/docInteractions';
+import { auth, canRoleWrite, isPrehydrationSafeKey, notifyBlockedWrite, store } from './storage';
 import type { PersistenceStatus, UserRole, WritePermission } from './storage';
 import MarketingLanding from './marketing/MarketingLanding';
 import './marketing/marketing.css';
@@ -21,6 +22,7 @@ import DocAuthGate from './multitenant/DocAuthGate';
 import LandingPageEditor from './multitenant/LandingPageEditor';
 import TenantUsersPage from './multitenant/TenantUsersPage';
 import { TenantCMSEntry } from './multitenant/CompanyCMSShell';
+import { authMeCached, publicDocCompany } from './multitenant/api';
 import './multitenant/multitenant.css';
 import './multitenant/company-admin.css';
 import './multitenant/superadmin.css';
@@ -198,24 +200,6 @@ type MarkerDragState =
   | ({ id: string; mode: 'resize'; edge: MarkerResizeEdge; originX: number; originY: number; originW: number; originH: number } & MarkerDragSurface)
   | ({ id: string; mode: 'rotate'; centerX: number; centerY: number; rotationOffset: number } & MarkerDragSurface)
   | ({ id: string; mode: 'popover'; offsetX: number; offsetY: number; popoverWidth: number; popoverHeight: number } & MarkerDragSurface);
-type AnimeAnimationHandle = {
-  play?: () => void;
-  resume?: () => void;
-  pause?: () => void;
-  restart?: () => void;
-  remove?: () => void;
-  cancel?: () => void;
-};
-type AnimeRuntime = {
-  animate?: (targets: unknown, parameters: Record<string, unknown>) => AnimeAnimationHandle;
-  createTimeline?: (parameters?: Record<string, unknown>) => {
-    add: (targets: unknown, parameters: Record<string, unknown>, position?: string | number) => unknown;
-    pause?: () => void;
-    play?: () => void;
-    cancel?: () => void;
-    remove?: () => void;
-  };
-};
 type ScreenshotDraft = Pick<ScreenshotEditableTarget, 'src' | 'alt' | 'caption' | 'markers'>;
 type DocComponentKind = 'callout' | 'accordion' | 'tabs' | 'list' | 'table' | 'regions' | 'steps' | 'carousel';
 type DocComponentItem = { id: string; title: string; body: string };
@@ -371,16 +355,15 @@ const MARKER_COLOR_PRESETS_DEFAULT: MarkerColorPreset[] = [
 ];
 const THEME_PRESET_LIMIT = 10;
 const DEFAULT_THEME_PRESETS: ThemePreset[] = [
-  { id: 'theme-aviator-core', name: 'Aviator Core', primary: '#ff1b23', accent: '#63cdff', ink: '#191919', surface: '#f8f5ef', markerFill: '#a92a34', markerBorder: '#a92a34', readerAccent: '#ff1b23', readerDefaultMode: 'dark', locked: true },
+  { id: 'theme-crimson-core', name: 'Crimson Core', primary: '#ff1b23', accent: '#63cdff', ink: '#191919', surface: '#f8f5ef', markerFill: '#a92a34', markerBorder: '#a92a34', readerAccent: '#ff1b23', readerDefaultMode: 'dark', locked: true },
   { id: 'theme-flight-ops', name: 'Flight Ops', primary: '#ef3b25', accent: '#0050b3', ink: '#151719', surface: '#f6f9fb', markerFill: '#2b5fc8', markerBorder: '#0050b3', readerAccent: '#ff1b23', readerDefaultMode: 'dark', locked: true },
   { id: 'theme-reader-calm', name: 'Reader Calm', primary: '#910d19', accent: '#36a9e1', ink: '#26313a', surface: '#fbfaf6', markerFill: '#0b9050', markerBorder: '#0b9050', readerAccent: '#ff1b23', readerDefaultMode: 'dark', locked: true },
 ];
 const MARKER_RESIZE_EDGES: MarkerResizeEdge[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 const MIN_MARKER_SIZE = 4;
-const ANIME_JS_ESM_URL = 'https://cdn.jsdelivr.net/npm/animejs/+esm';
 const REVISION_LIMIT = 50;
+const TRANSLATION_PAGE_SIZE = 50;
 const VIDEO_LOOP_PLAY_COUNT = 10;
-let animeRuntimePromise: Promise<AnimeRuntime | null> | null = null;
 const DOC_COMPONENT_TYPES: { kind: DocComponentKind; label: string }[] = [
   { kind: 'callout', label: 'Callout' },
   { kind: 'accordion', label: 'Accordion' },
@@ -629,381 +612,6 @@ const PRODUCT_SETUP_STEPS = [
   'Run smoke checks before handoff.',
 ];
 
-const DEFAULT_MINESCAPE_DOC_ID = 'doc-minescape-interface';
-
-function makeMarker(
-  id: string,
-  label: string,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  options: Partial<MarkerDraft> = {},
-): MarkerDraft {
-  return {
-    id,
-    label,
-    description: options.description ?? '',
-    x, y, w, h,
-    popoverX: options.popoverX ?? Math.min(95, x + w / 2),
-    popoverY: options.popoverY ?? Math.min(95, y + h + 3),
-    align: options.align ?? 'center',
-    kind: options.kind ?? 'shape',
-    borderStyle: options.borderStyle ?? MARKER_DEFAULT_BORDER_STYLE,
-    borderColor: options.borderColor ?? MARKER_DEFAULT_BORDER_COLOR,
-    borderOpacity: options.borderOpacity ?? MARKER_DEFAULT_BORDER_OPACITY,
-    backgroundColor: options.backgroundColor ?? MARKER_DEFAULT_BACKGROUND_COLOR,
-    backgroundOpacity: options.backgroundOpacity ?? MARKER_DEFAULT_SHAPE_BACKGROUND_OPACITY,
-    textColor: options.textColor ?? MARKER_DEFAULT_TEXT_COLOR,
-    textOpacity: options.textOpacity ?? MARKER_DEFAULT_TEXT_OPACITY,
-    dialogBackgroundColor: options.dialogBackgroundColor ?? MARKER_DEFAULT_DIALOG_BACKGROUND_COLOR,
-    dialogBackgroundOpacity: options.dialogBackgroundOpacity ?? MARKER_DEFAULT_DIALOG_BACKGROUND_OPACITY,
-    dialogBorderColor: options.dialogBorderColor ?? MARKER_DEFAULT_DIALOG_BORDER_COLOR,
-    dialogBorderOpacity: options.dialogBorderOpacity ?? MARKER_DEFAULT_DIALOG_BORDER_OPACITY,
-    dialogTextColor: options.dialogTextColor ?? MARKER_DEFAULT_DIALOG_TEXT_COLOR,
-    dialogTextOpacity: options.dialogTextOpacity ?? MARKER_DEFAULT_DIALOG_TEXT_OPACITY,
-    ctaBackgroundColor: options.ctaBackgroundColor ?? MARKER_DEFAULT_CTA_BACKGROUND_COLOR,
-    ctaBackgroundOpacity: options.ctaBackgroundOpacity ?? MARKER_DEFAULT_CTA_BACKGROUND_OPACITY,
-    ctaTextColor: options.ctaTextColor ?? MARKER_DEFAULT_CTA_TEXT_COLOR,
-    ctaTextOpacity: options.ctaTextOpacity ?? MARKER_DEFAULT_CTA_TEXT_OPACITY,
-    targetSectionId: options.targetSectionId ?? MARKER_DEFAULT_POINTER_TARGET,
-    animated: options.animated ?? false,
-    pointerRotation: options.pointerRotation ?? MARKER_DEFAULT_POINTER_ROTATION,
-    pointerThickness: options.pointerThickness ?? MARKER_DEFAULT_POINTER_THICKNESS,
-  };
-}
-
-const DEFAULT_MINESCAPE_INTERFACE_SECTIONS: SectionEntry[] = [
-  interfaceDocSection(
-    'doc-minescape-interface-s1',
-    '1.0',
-    'docpilot-content-frame',
-    'Document Frame',
-    'Audience, evidence base, role-based reading map, and scope boundaries for the Minescape interface reference.',
-    'review',
-    'Product',
-    `
-    <p><strong>Minescape</strong> is a crash-and-hold mines engine. A player stakes a bet, reveals tiles on a configurable grid, and decides each round whether to keep revealing or cash out the running multiplier. The round ends either by player cashout (win) or by hitting a mine (loss). Every round is independent.</p>
-    <p>This document is the canonical internal description of the Minescape play interface for Aviator Studio teams and partner operators. It is grounded in source screen evidence (37 PNGs + 1 GIF + 1 MOV in <code>public/images/minescape/</code>). Where the screen evidence is not sufficient, sections explicitly mark items as pending engineering confirmation.</p>
-    <table>
-      <thead><tr><th>Field</th><th>Value</th></tr></thead>
-      <tbody>
-        <tr><td class="col-key">Workspace</td><td>Aviator Studio</td></tr>
-        <tr><td class="col-key">Product</td><td>Minescape (also ships as <em>Aviator</em> skin — same engine, different wordmark)</td></tr>
-        <tr><td class="col-key">Document type</td><td>Internal interface reference + partner operator handbook</td></tr>
-        <tr><td class="col-key">Primary audience</td><td>TAM, account managers, finance, data, legal &amp; compliance, QA, support, localization, partner operators</td></tr>
-        <tr><td class="col-key">Not aimed at</td><td>Players — player-facing copy is derived from this doc but owned by support and localization</td></tr>
-        <tr><td class="col-key">Evidence base</td><td>37 PNG screenshots + 1 GIF + 1 MOV. Every UI claim is anchored to a referenced capture.</td></tr>
-        <tr><td class="col-key">Status</td><td>Review draft — settlement timing, event schema, and regulator-facing details are pending engineering confirmation</td></tr>
-      </tbody>
-    </table>
-    <h3>Where to start, by role</h3>
-    <table>
-      <thead><tr><th>Role</th><th>Start at</th><th>Then</th></tr></thead>
-      <tbody>
-        <tr><td class="col-key">TAM, account managers</td><td><a href="#doc-minescape-interface-s3">Section 3 — Control Reference</a></td><td><a href="#doc-minescape-interface-s5">Section 5 — QA &amp; Localization</a></td></tr>
-        <tr><td class="col-key">Finance, data</td><td><a href="#doc-minescape-interface-s4">Section 4 — Interaction States</a> (debit/credit moments)</td><td><a href="#doc-minescape-interface-s3">Section 3</a></td></tr>
-        <tr><td class="col-key">Legal &amp; compliance</td><td><a href="#doc-minescape-interface-s4">Section 4 — Interaction States</a> (stop conditions, settlement)</td><td><a href="#doc-minescape-interface-s5">Section 5</a></td></tr>
-        <tr><td class="col-key">QA</td><td><a href="#doc-minescape-interface-s2">Section 2 — Screen Anatomy</a></td><td><a href="#doc-minescape-interface-s4">Section 4</a></td></tr>
-        <tr><td class="col-key">Support, localization</td><td><a href="#doc-minescape-interface-s5">Section 5 — QA &amp; Localization</a></td><td><a href="#doc-minescape-interface-s3">Section 3</a></td></tr>
-        <tr><td class="col-key">Partner operators</td><td><a href="#doc-minescape-interface-s1">Section 1</a> → <a href="#doc-minescape-interface-s3">Section 3</a></td><td><a href="#doc-minescape-interface-s5">Section 5</a></td></tr>
-      </tbody>
-    </table>
-    <div class="callout warn">
-      <span class="callout-title">Scope boundary</span>
-      <p>This is not regulator-filing copy, not player help-center content, and not a training script. It is the canonical internal description of how the engine behaves and what the operator can configure. Treat any value not yet confirmed by engineering as pending.</p>
-    </div>
-    <div class="callout info">
-      <span class="callout-title">Currency note</span>
-      <p>Throughout this document, currency is <code>GEL</code> (Georgian Lari). The Bet Amount field uses comma decimals (<code>GEL 1,00</code> = one lari). The Potential Win bar displays the same value with period decimal (<code>GEL 242.50</code>). This inconsistency is in the engine — flagged for localization in <a href="#doc-minescape-interface-s5">Section 5</a>.</p>
-    </div>
-    `,
-  ),
-  interfaceDocSection(
-    'doc-minescape-interface-s2',
-    '2.0',
-    'screen-anatomy',
-    'Screen Anatomy',
-    'Named regions and player-visible components on the Minescape desktop screen.',
-    'review',
-    'UX',
-    `
-    <p>The interface uses a two-zone desktop layout: a configuration side-panel on the left, and the playable crate grid on the right. A small multiplier ladder runs across the top of the board. Region letters in the table below are referenced throughout this document — when a later section says "the chip in region E lights up," consult this map.</p>
-    ${annotatedImageMarkup({
-      src: '/images/minescape/aviator-minescape-default-screen.png',
-      alt: 'Default Minescape play screen showing the header bar, mode tabs, bet configuration, primary action button, multiplier ladder, play board, and footer strip',
-    })}
-    <p class="figure-caption-block"><strong>Figure 2.1.</strong> Default screen on the Minescape skin. Balance 1000 GEL, Grid Size 25, Number of Mines 1, Manual mode, Start Mission CTA. Markers A through G outline the seven referenced regions.</p>
-    <table>
-      <thead><tr><th>Region</th><th>Name</th><th>Contains</th></tr></thead>
-      <tbody>
-        <tr><td class="col-key">A</td><td>Header bar</td><td>Skin wordmark (<strong>MINESCAPE</strong> / <em>Aviator</em>), client clock, balance in GEL, burger menu icon</td></tr>
-        <tr><td class="col-key">B</td><td>Mode tabs</td><td>Segmented control: <span class="ui">Manual</span> · <span class="ui">Auto</span>. Locked while a round or autobet loop is active.</td></tr>
-        <tr><td class="col-key">C</td><td>Bet configuration panel</td><td>Bet Amount field, quick modifiers <span class="ui">½</span> <span class="ui">2X</span> <span class="ui">Max</span>, Potential Win helper, Grid Size row, Number of Mines row, Advanced Settings (Auto mode only)</td></tr>
-        <tr><td class="col-key">D</td><td>Primary action button</td><td>Single wide button at panel bottom. Label changes by state — see <a href="#doc-minescape-interface-s3">Section 3</a>.</td></tr>
-        <tr><td class="col-key">E</td><td>Multiplier ladder</td><td>Row of seven small chips above the board showing upcoming payout multipliers. Active chip highlights yellow during a live round.</td></tr>
-        <tr><td class="col-key">F</td><td>Play board</td><td>Grid of closed crates (5×5, 6×6, 7×7, or 8×8). Click to reveal. Safe reveals show a green money-bag icon; mines show a red bomb icon.</td></tr>
-        <tr><td class="col-key">G</td><td>Footer strip</td><td>Provably Fair badge, version number, client clock</td></tr>
-      </tbody>
-    </table>
-    <div class="callout info">
-      <span class="callout-title">Skin variants</span>
-      <p>The engine ships under at least two skins: <strong>MINESCAPE</strong> (green wordmark, <span class="ui green">Start Mission</span> CTA) and <em>Aviator</em> (red script wordmark, <span class="ui green">Start Bet</span> CTA). Same engine, same math, same state machine. Different wordmark and CTA copy only.</p>
-    </div>
-    `,
-  ),
-  interfaceDocSection(
-    'doc-minescape-interface-s3',
-    '3.0',
-    'control-reference',
-    'Control Reference',
-    'Verified control inventory: defaults, ranges, operator-tunable knobs, and pending engineering questions.',
-    'review',
-    'Docs',
-    `
-    <p>Every control in <a href="#doc-minescape-interface-s2">region C</a> with its observed values, ranges, and operator-configurable bounds. Values marked <em>verified</em> are anchored to a specific screenshot; values marked <em>pending</em> need engineering confirmation before publication.</p>
-    <h3>3.1 Bet configuration</h3>
-    <table>
-      <thead><tr><th>Control</th><th>Verified</th><th>Behaviour</th><th>Operator-tunable</th></tr></thead>
-      <tbody>
-        <tr><td class="col-key">Bet Amount</td><td>Min seen: <code>GEL 1,00</code>. Decimal format uses comma.</td><td>Stake for the next round (Manual) or autobet sequence (Auto). Locks the moment the round starts.</td><td>Min/max bet per operator profile (pending — confirm engine-side hard min).</td></tr>
-        <tr><td class="col-key">½</td><td>Halves current bet</td><td>Chip highlights blue when most recent input.</td><td>Document rounding behaviour for minor units.</td></tr>
-        <tr><td class="col-key">2X</td><td>Doubles current bet</td><td>Chip highlights blue when most recent input. Caps at operator per-bet ceiling.</td><td>Same ceiling as <strong>Max</strong>.</td></tr>
-        <tr><td class="col-key">Max</td><td>Verified <code>GEL 400</code> on a <code>GEL 20,000</code> balance</td><td><strong>Per-bet ceiling, NOT all-in.</strong> Player must type manually for larger bets.</td><td>Ceiling source: operator config, VIP tier, or regulator. Confirm per skin.</td></tr>
-        <tr><td class="col-key">Potential Win</td><td>Linear with stake. 25-grid / 1-mine ceiling = <code>24.25×</code></td><td>Best-case payout for the current configuration: <code>bet × ceiling multiplier</code>. Ceiling depends on grid+mines, not stake.</td><td>Round-half conventions to match displayed precision.</td></tr>
-      </tbody>
-    </table>
-    ${annotatedImageMarkup({
-      src: '/images/minescape/aviator-minescape-max-bet-selected-400-gel.png',
-      alt: 'Max button selected showing balance, bet field, max chip highlighted, and potential win calculation',
-    })}
-    <p class="figure-caption-block"><strong>Figure 3.1.</strong> The Max button is a <strong>per-bet ceiling</strong>, not an all-in. Balance 20,000 GEL; Max produces only 400 GEL stake.</p>
-    <h3>3.2 Grid + mines</h3>
-    <table>
-      <thead><tr><th>Grid</th><th>Board shape</th><th>Mine presets offered</th><th>Custom upper bound</th></tr></thead>
-      <tbody>
-        <tr><td class="col-key">25</td><td>5 × 5</td><td><span class="ui">1</span> <span class="ui">3</span> <span class="ui">5</span> <span class="ui">10</span> <span class="ui">Custom</span></td><td>24 (verified)</td></tr>
-        <tr><td class="col-key">36</td><td>6 × 6</td><td><span class="ui">2</span> <span class="ui">5</span> <span class="ui">10</span> <span class="ui">15</span> <span class="ui">Custom</span></td><td>35 (verified)</td></tr>
-        <tr><td class="col-key">49</td><td>7 × 7</td><td><span class="ui">3</span> <span class="ui">10</span> <span class="ui">15</span> <span class="ui">30</span> <span class="ui">Custom</span></td><td>48 (pending)</td></tr>
-        <tr><td class="col-key">64</td><td>8 × 8</td><td><span class="ui">4</span> <span class="ui">15</span> <span class="ui">25</span> <span class="ui">35</span> <span class="ui">Custom</span></td><td>63 (pending)</td></tr>
-      </tbody>
-    </table>
-    <p>The mine preset row redraws when grid size changes. Custom field accepts whole numbers; upper bound appears to be <code>grid − 1</code> based on observed evidence for 25 and 36.</p>
-    <h3>3.3 Multiplier ladder examples</h3>
-    <p>Seven chips visible at the top of the board (region E). Values depend on grid + mine configuration. A sample:</p>
-    <table>
-      <thead><tr><th>Config</th><th>Ladder (first 6 chips)</th><th>Personality</th></tr></thead>
-      <tbody>
-        <tr><td class="col-key">25 / 1</td><td><code>x1.01, x1.05, x1.10, x1.15, x1.21, x1.28</code></td><td>Gentle climb. Friendly default.</td></tr>
-        <tr><td class="col-key">25 / 10</td><td><code>x1.62, x2.77, x4.9, x8.99, x17.16, x34.32</code></td><td>Explosive. High volatility.</td></tr>
-        <tr><td class="col-key">36 / 15</td><td><code>x1.66, x3.10, x5.21, x9.45, x18.30, x34.62</code></td><td>Most explosive non-Custom preset.</td></tr>
-      </tbody>
-    </table>
-    ${annotatedImageMarkup({
-      src: '/images/minescape/aviator-minescape-grid-size-25-mines-10.png',
-      alt: 'Grid size 25 with 10 mines preset selected showing steep multiplier ladder',
-    })}
-    <p class="figure-caption-block"><strong>Figure 3.3.</strong> 25/10 ladder — the explosive curve. Compare against 25/1 (x1.01, x1.05, x1.10, x1.15, x1.21, x1.28) to see how mine count compounds reward and risk together.</p>
-    <div class="callout warn">
-      <span class="callout-title">Ladder pagination — pending</span>
-      <p>Long rounds (e.g. 25/1 has 24 safe tiles) clear all seven chips. Behaviour beyond chip 7 — scroll, paginate, or freeze — is unconfirmed. Add to <a href="#doc-minescape-interface-s5">Section 5</a> question list.</p>
-    </div>
-    <h3>3.4 Primary action button states</h3>
-    <table>
-      <thead><tr><th>Game state</th><th>Label</th><th>Colour</th></tr></thead>
-      <tbody>
-        <tr><td class="col-key">Default, Manual, Minescape skin</td><td><span class="ui green">Start Mission</span></td><td>Green</td></tr>
-        <tr><td class="col-key">Default, Manual, Aviator skin</td><td><span class="ui green">Start Bet</span></td><td>Green</td></tr>
-        <tr><td class="col-key">Bet staked, no tiles opened</td><td><code>Cashout GEL 0.00</code></td><td>Yellow / orange</td></tr>
-        <tr><td class="col-key">Bet staked, tiles revealed</td><td><code>Cashout GEL X.XX</code> (live)</td><td>Yellow / orange</td></tr>
-        <tr><td class="col-key">Default, Auto mode</td><td><span class="ui green">Start Autobet</span></td><td>Green</td></tr>
-        <tr><td class="col-key">Autobet running</td><td><span class="ui">Stop Autobet</span> (with counter <code>remaining / total</code>)</td><td>Red</td></tr>
-      </tbody>
-    </table>
-    <h3>3.5 Auto-mode advanced settings (6 fields)</h3>
-    ${annotatedImageMarkup({
-      src: '/images/minescape/aviator-minescape-auto-mode-advanced-settings.png',
-      alt: 'Advanced Settings panel expanded showing all six autobet configuration fields',
-    })}
-    <p class="figure-caption-block"><strong>Figure 3.5.</strong> Advanced Settings panel with all six fields marked. Numbered overlays correspond to the list below.</p>
-    <ol class="steps">
-      <li><strong>Payout On Win</strong> — target multiplier at which a round auto-cashes-out (e.g. <code>1.45x</code>).</li>
-      <li><strong>Number Of Bets</strong> — how many rounds to play. Supports <code>∞</code> (unlimited).</li>
-      <li><strong>On Win</strong> — <span class="ui">Reset</span> or <span class="ui">Increase by X%</span>.</li>
-      <li><strong>On Loss</strong> — <span class="ui">Reset</span> or <span class="ui">Increase by X%</span>.</li>
-      <li><strong>Stop On Profit</strong> — GEL cumulative-profit threshold. Engine halts when reached.</li>
-      <li><strong>Stop On Loss</strong> — GEL cumulative-loss threshold. Engine halts when reached.</li>
-    </ol>
-    <h3>3.6 Misc controls</h3>
-    <table>
-      <thead><tr><th>Control</th><th>Behaviour</th><th>Note</th></tr></thead>
-      <tbody>
-        <tr><td class="col-key">Dice (Randomize)</td><td>Manual round: reveals one tile chosen by the engine. Auto setup: randomises pre-selected tile set.</td><td>Single-click action. No mathematical advantage over manual picks.</td></tr>
-        <tr><td class="col-key">Burger menu</td><td>Opens slide-in menu: Username/avatar · Sound · Music · Dark mode · My Bets · Rules · Limits</td><td>All toggles default ON in captures. Persistence scope (account / device) pending.</td></tr>
-        <tr><td class="col-key">Provably Fair badge</td><td>Footer link to verification page</td><td>Operator must wire the verification URL before launch.</td></tr>
-      </tbody>
-    </table>
-    ${annotatedImageMarkup({
-      src: '/images/minescape/aviator-minescape-burger-menu-open.png',
-      alt: 'Burger menu open displaying username, sound toggle, music toggle, dark mode toggle, and My Bets navigation',
-    })}
-    <p class="figure-caption-block"><strong>Figure 3.6.</strong> Burger menu open. Scroll reveals Rules and Limits below My Bets.</p>
-    `,
-  ),
-  interfaceDocSection(
-    'doc-minescape-interface-s4',
-    '4.0',
-    'interaction-states',
-    'Interaction States &amp; Settlement',
-    'State machine, debit/credit moments, and the four ways an autobet loop can end.',
-    'review',
-    'QA',
-    `
-    <p>The engine has four observable states. Every reproducible bug, every settlement moment, every regulator-facing claim lives in one of them or a transition between two.</p>
-    <h3>4.1 Default state</h3>
-    <p>Player configures stake, grid size, mine count. All Region C controls are editable. Mode tabs unlocked. <a href="#doc-minescape-interface-s3">Primary action button</a> is green.</p>
-    <h3>4.2 Bet-placed state (Manual round live)</h3>
-    <p>The moment the player presses Start, four things happen simultaneously:</p>
-    <ol class="steps">
-      <li><strong>Balance debit</strong> — stake is deducted immediately. <em>Finance/data note:</em> this is the <code>bet_placed</code> moment. Balance updates in real time (verified: 1000 GEL → 999 GEL after a 1.00 GEL stake).</li>
-      <li><strong>Controls lock</strong> — bet/grid/mines/mode tabs become non-editable until round ends.</li>
-      <li><strong>Cashout button activates</strong> — replaces Start. Shows <code>Cashout GEL X.XX</code> live. Available immediately at <code>GEL 0.00</code> (pressing then forfeits stake — engine allows but UX-discouraged).</li>
-      <li><strong>Dice button appears</strong> — next to Cashout. Reveals one engine-chosen tile.</li>
-    </ol>
-    ${annotatedImageMarkup({
-      src: '/images/minescape/aviator-minescape-bet-placed-hover-tile.png',
-      alt: 'Bet-placed state showing balance debit, locked controls, yellow cashout button, dice icon, and crate hover preview',
-    })}
-    <p class="figure-caption-block"><strong>Figure 4.2.</strong> Bet-placed state. The four state changes from list above are visible: balance, locked controls, Cashout button, dice. Hover indicator on a crate is purely visual.</p>
-    <p>The board becomes interactive. <a href="#doc-minescape-interface-s2">Verified by GIF</a>: clicking a crate <strong>before</strong> a bet is staked is a no-op.</p>
-    <h3>4.3 Reveal cycle</h3>
-    <ul>
-      <li><strong>Safe click:</strong> crate opens (green money-bag icon), multiplier advances, ladder chip lights yellow, Cashout amount climbs.</li>
-      <li><strong>Mine click:</strong> crate opens (red mine icon), round ends, stake is forfeited. State returns to Default. <em>Finance/data note:</em> this is the <code>round_lost</code> moment. No additional debit (stake was already debited at <code>bet_placed</code>).</li>
-      <li><strong>Cashout press:</strong> round ends in profit. The displayed Cashout amount is credited to the balance. State returns to Default. <em>Finance/data note:</em> this is the <code>cashout</code> moment — the settlement event. Every regulator-facing claim attaches here.</li>
-    </ul>
-    ${annotatedImageMarkup({
-      src: '/images/minescape/aviator-minescape-multiple-tiles-open-cashout-active.png',
-      alt: 'Mid-round state with multiple safe tiles revealed, active multiplier chip highlighted, and live cashout amount displayed',
-    })}
-    <p class="figure-caption-block"><strong>Figure 4.3a.</strong> Win path mid-round. Several safe reveals; ladder chip lit; Cashout button shows live payout. The three indicators always agree — disagreement = state-sync bug.</p>
-    ${annotatedImageMarkup({
-      src: '/images/minescape/aviator-minescape-lose-state-mine-revealed.png',
-      alt: 'Lose state showing red mine revealed on board and control panel reset to default editable state',
-    })}
-    <p class="figure-caption-block"><strong>Figure 4.3b.</strong> Lose path. A mine has been revealed (top), and the side-panel has already snapped back to its default editable state. No emotional language, no second-chance UX.</p>
-    <div class="callout info">
-      <span class="callout-title">Money flow timeline (finance / data reference)</span>
-      <p>For a single Manual round at stake <code>S</code>:</p>
-      <ul>
-        <li><strong>T<sub>0</sub></strong> — Player presses <span class="ui green">Start</span>. Server receives <code>bet_placed</code>. Balance debited by <code>S</code>. Ledger entry: <code>-S</code>.</li>
-        <li><strong>T<sub>1..n</sub></strong> — Player reveals <code>n</code> safe tiles. Engine emits <code>tile_revealed</code> events. <strong>No ledger movement.</strong> Current multiplier displayed only.</li>
-        <li><strong>T<sub>n+1</sub></strong> — Round ends one of two ways:
-          <ul>
-            <li><strong>Cashout</strong> at multiplier <code>m</code>: ledger entry <code>+S × m</code>. Net profit <code>S × (m − 1)</code>. Settlement event = <code>cashout</code>.</li>
-            <li><strong>Mine hit</strong>: no ledger entry. Stake already taken at T<sub>0</sub>. Settlement event = <code>round_lost</code>.</li>
-          </ul>
-        </li>
-      </ul>
-      <p>Round is atomic — engine state-machine guarantees exactly one terminal event per <code>bet_placed</code>. Reconciliation = match every <code>bet_placed</code> to exactly one <code>cashout</code> or <code>round_lost</code>.</p>
-    </div>
-    <h3>4.4 Autobet-running state</h3>
-    <p>Same engine, but cashout is automatic (per <strong>Payout On Win</strong>) and the loop continues across rounds. The Primary Action button is red and reads <span class="ui">Stop Autobet</span> with counter <code>remaining / total</code> (e.g. <code>2/10</code> means 8 played, 2 remain). A losing round inside autobet <strong>does NOT</strong> halt the loop — verified.</p>
-    ${annotatedImageMarkup({
-      src: '/images/minescape/aviator-minescape-auto-mode-win-state-infinite-rounds.png',
-      alt: 'Autobet running state showing winning round payout popup and red stop autobet button with counter',
-    })}
-    <p class="figure-caption-block"><strong>Figure 4.4.</strong> Autobet running. Winning round payout popup is visible on the board; Stop Autobet button remains red and the loop continues.</p>
-    <h3>4.5 Autobet stop conditions — exactly four</h3>
-    <ol class="steps">
-      <li><strong>Manual Stop</strong> — player taps Stop Autobet. Engine finishes the in-flight round and halts.</li>
-      <li><strong>Stop On Profit fires</strong> — cumulative session profit ≥ configured threshold. Halts at end of current round.</li>
-      <li><strong>Stop On Loss fires</strong> — cumulative session loss ≥ configured threshold. Halts at end of current round.</li>
-      <li><strong>Number Of Bets counter reaches zero</strong> — last configured round finishes and engine halts.</li>
-    </ol>
-    ${annotatedImageMarkup({
-      src: '/images/minescape/aviator-minescape-auto-mode-advanced-settings-stop-on-profit-10-stop-on-loss-20.png',
-      alt: 'Advanced Settings showing Stop On Profit set to 10 GEL and Stop On Loss set to 20 GEL for bounded sessions',
-    })}
-    <p class="figure-caption-block"><strong>Figure 4.5.</strong> A bounded autobet session: 10 GEL profit cap, 20 GEL loss cap. A 2:1 risk/reward shape — common for sustainable sessions.</p>
-    <h3>4.6 Error and boundary states</h3>
-    <ul>
-      <li>Insufficient balance when player attempts Start.</li>
-      <li>Bet amount below min or above operator max.</li>
-      <li>Custom mine count outside allowed range for the grid.</li>
-      <li>Network interruption mid-round (behaviour pending — see <a href="#doc-minescape-interface-s5">Section 5</a>).</li>
-      <li>Provably-fair seed validation failure (regulator-facing; pending engineering doc).</li>
-    </ul>
-    <div class="callout important">
-      <span class="callout-title">Required before final publish</span>
-      <p>Capture additional screenshots for: mine-revealed lose state · live Cashout at non-zero · autobet-running with counter visible · burger menu open · Advanced Settings panel expanded · Stop On Loss fired. Without these, support and QA cannot reference visual ground truth.</p>
-    </div>
-    `,
-  ),
-  interfaceDocSection(
-    'doc-minescape-interface-s5',
-    '5.0',
-    'qa-localization-notes',
-    'QA, Localization &amp; Open Questions',
-    'Internal-team checklist: translation keys, screenshot backlog, engineering questions, and regulator-facing items.',
-    'review',
-    'Localization',
-    `
-    <h3>5.1 Localization scope</h3>
-    <p>Two distinct string sets:</p>
-    <ul>
-      <li><strong>Skin-branded CTAs</strong> — translated per skin. Examples: <span class="ui green">Start Bet</span> (Aviator) vs <span class="ui green">Start Mission</span> (Minescape).</li>
-      <li><strong>Universal control labels</strong> — translated once, never per skin. These keep the engine portable across operator deployments.</li>
-    </ul>
-    <h3>5.2 Universal label key list</h3>
-    <p>Keep these stable across all skins for translation reuse:</p>
-    <p><span class="ui">Manual</span> · <span class="ui">Auto</span> · <span class="ui">Bet Amount</span> · <span class="ui">Potential Win</span> · <span class="ui">Grid Size</span> · <span class="ui">Number of Mines</span> · <span class="ui">Custom</span> · <span class="ui">Advanced Settings</span> · <span class="ui">Payout On Win</span> · <span class="ui">Number Of Bets</span> · <span class="ui">On Win</span> · <span class="ui">On Loss</span> · <span class="ui">Stop On Profit</span> · <span class="ui">Stop On Loss</span> · <span class="ui green">Cashout</span> · <span class="ui green">Start Autobet</span> · <span class="ui">Stop Autobet</span> · <span class="ui">Reset</span> · <span class="ui">Increase by</span> · <span class="ui">My Bets</span> · <span class="ui">Rules</span> · <span class="ui">Limits</span> · <span class="ui">Sound</span> · <span class="ui">Music</span> · <span class="ui">Dark mode</span> · <span class="ui">Provably Fair Game</span></p>
-    <h3>5.3 Decimal format inconsistency (engine-level)</h3>
-    <div class="callout warn">
-      <span class="callout-title">Flagged for engineering</span>
-      <p>Bet Amount field uses comma decimals (<code>GEL 1,00</code>). Potential Win bar uses period decimal (<code>GEL 242.50</code>). Same currency, same screen, two formats. Localization cannot fix this from the string layer — it requires engine-side number formatting reconciliation.</p>
-    </div>
-    <h3>5.4 Screenshot annotation backlog</h3>
-    <p>Reference doc imagery lives at <code>public/images/minescape/</code> (40 files). Annotated reference figures still needed for:</p>
-    <ul>
-      <li><strong>Lose state</strong> with mine revealed (<code>aviator-minescape-lose-state-mine-revealed.png</code> exists; needs marker overlay).</li>
-      <li><strong>Live Cashout</strong> at non-zero multiplier (<code>aviator-minescape-multiple-tiles-open-cashout-active.png</code> exists; needs marker overlay).</li>
-      <li><strong>Autobet running</strong> with counter visible (<code>aviator-minescape-auto-mode-win-state-infinite-rounds.png</code>).</li>
-      <li><strong>Advanced Settings expanded</strong> with all 6 fields (<code>aviator-minescape-auto-mode-advanced-settings.png</code>).</li>
-      <li><strong>Burger menu</strong> open (<code>aviator-minescape-burger-menu-open.png</code>).</li>
-      <li><strong>Stop On Loss / Stop On Profit fired</strong> end-of-session state (capture pending).</li>
-    </ul>
-    <h3>5.5 Open engineering questions</h3>
-    <ol class="steps">
-      <li><strong>Min/max bet hard limits</strong> per skin and per operator profile.</li>
-      <li><strong>Max-button ceiling source</strong> — operator config, VIP tier, or regulator.</li>
-      <li><strong>Custom mine upper bound</strong> for grids 49 and 64 (verified for 25 and 36 only).</li>
-      <li><strong>Ladder pagination</strong> behaviour past chip 7 on long rounds.</li>
-      <li><strong>Disconnect mid-round</strong> — does engine resume on reconnect, auto-cash, or void the bet?</li>
-      <li><strong>Toggle persistence</strong> — Sound / Music / Dark mode: per session, per device, or per account?</li>
-      <li><strong>Round event names</strong> — exact event keys emitted to the data pipeline (<code>bet_placed</code>, <code>tile_revealed</code>, <code>cashout</code>, <code>round_lost</code>, <code>autobet_started</code>, <code>autobet_stopped</code> — naming pending).</li>
-      <li><strong>Allowed percentage range</strong> for On Win / On Loss Increase rule.</li>
-    </ol>
-    <h3>5.6 Regulator-facing items (legal &amp; compliance)</h3>
-    <ul>
-      <li>Certified jurisdictions, RTP range, theoretical max win per market.</li>
-      <li>Provably Fair protocol — hash algorithm, seed lifecycle, verification page contract, dispute flow.</li>
-      <li>Responsible Gaming hooks — server-side vs client-side enforcement of <span class="ui">Limits</span>; self-exclusion propagation.</li>
-    </ul>
-    <h3>5.7 Common player-support patterns</h3>
-    <table>
-      <thead><tr><th>Player says</th><th>Most likely root cause</th><th>Where to look</th></tr></thead>
-      <tbody>
-        <tr><td>"I pressed Max but only got 400 GEL"</td><td>Operator per-bet ceiling, not balance limit.</td><td><a href="#doc-minescape-interface-s3">§3.1 — Max</a></td></tr>
-        <tr><td>"My balance dropped before I revealed any tile"</td><td>Bet debited at Start, not at first reveal.</td><td><a href="#doc-minescape-interface-s4">§4.2</a></td></tr>
-        <tr><td>"Autobet didn't stop after I lost a round"</td><td>A single loss is not a stop condition. Only the four in §4.5 are.</td><td><a href="#doc-minescape-interface-s4">§4.5</a></td></tr>
-        <tr><td>"I cashed out at GEL 0.00 by accident"</td><td>Cashout is available from bet-placed; engine permits but doesn't warn.</td><td><a href="#doc-minescape-interface-s4">§4.2</a></td></tr>
-      </tbody>
-    </table>
-    `,
-  ),
-];
-
 const DEFAULT_DOCS: DocEntry[] = defaultdocsJson as DocEntry[];
 
 const sectionHtmlBlocks = extractManualSections(manualHtml);
@@ -1071,7 +679,7 @@ const DEFAULT_RELEASES: ReleaseEntry[] = [
     version: '1.0.0',
     label: 'Integration Docs 1.0.0',
     status: 'draft',
-    notes: 'Seeded from uploaded Aviator Studio integration PDF.',
+    notes: 'Seeded from uploaded integration PDF.',
     createdAt: '2026-05-05',
   },
 ];
@@ -1086,7 +694,7 @@ function App() {
         <Route path="/products/:productId" element={<Navigate to="/" replace />} />
         <Route path="/games" element={<Navigate to="/" replace />} />
         <Route path="/games/:gameId" element={<Navigate to="/" replace />} />
-        <Route path="/docs/:docId" element={<DocAuthGate loginPath="/c/aviator"><DocReaderRoute /></DocAuthGate>} />
+        <Route path="/docs/:docId" element={<GatedDocRoute><DocReaderRoute /></GatedDocRoute>} />
         <Route path="/manual" element={<Navigate to="/docs/doc-manual" replace />} />
         <Route path="/manual/:slug" element={<ManualRedirect />} />
         <Route path="/c/:slug" element={<CompanyLanding />} />
@@ -1113,10 +721,10 @@ function RouteScrollReset() {
   return null;
 }
 
-function AviatorLogo({ product }: { product?: string }) {
+function BrandLogo({ product }: { product?: string }) {
   return (
-    <Link className="brand-logo" to="/" aria-label="Go to Aviator Docs main page">
-      <span className="brand-word">Aviator<span>.</span></span>
+    <Link className="brand-logo" to="/" aria-label="Go to DocPilot main page">
+      <span className="brand-word">DocPilot<span>.</span></span>
       {product ? <span className="brand-product">{product}</span> : null}
     </Link>
   );
@@ -1141,10 +749,36 @@ function ManualRedirect() {
   return <Navigate to={`/docs/doc-manual#${section.id}`} replace />;
 }
 
+// Gate for /docs/:docId — resolves the OWNING company's login for the bounce
+// instead of hardcoding one tenant. Resolution happens only on actual denial
+// (inside DocAuthGate); docs absent from the v2 documents table (e.g. KV-only
+// fixtures) fall back to the landing page when the owning company can't be resolved.
+function GatedDocRoute({ children }: { children: ReactNode }) {
+  const { docId } = useParams<{ docId: string }>();
+  const resolveLoginPath = useCallback(async () => {
+    if (!docId) return null;
+    try {
+      const { company } = await publicDocCompany(docId);
+      return `/c/${company.slug}`;
+    } catch {
+      return null;
+    }
+  }, [docId]);
+  return (
+    <DocAuthGate loginPath="/" resolveLoginPath={resolveLoginPath}>
+      {children}
+    </DocAuthGate>
+  );
+}
+
 function DocReaderRoute() {
   const [games] = useStoredState('cms_games_v1', DEFAULT_GAMES);
   const [storedDocs] = useStoredState('cms_docs_v2', DEFAULT_DOCS);
-  const docs = useMemo(() => mergeWithDefaults(storedDocs, DEFAULT_DOCS, (d) => d.id), [storedDocs]);
+  const [deletedDocIds] = useStoredState<string[]>('cms_deleted_doc_ids_v1', []);
+  const docs = useMemo(
+    () => mergeWithDefaults(storedDocs, DEFAULT_DOCS, (d) => d.id).filter((d) => !deletedDocIds.includes(d.id)),
+    [storedDocs, deletedDocIds],
+  );
   const [backOfficeSections] = useStoredState('cms_backoffice_sections_v1', DEFAULT_BACKOFFICE_SECTIONS);
   const [integrationSections] = useStoredState('cms_integration_sections_v1', DEFAULT_INTEGRATION_SECTIONS);
   const [manualSectionsState] = useStoredState('cms_sections_v2', DEFAULT_SECTIONS);
@@ -1264,7 +898,15 @@ export function Admin() {
   const [persistenceStatus, setPersistenceStatus] = useState<PersistenceStatus>(() => store.getPersistenceStatus());
   const [games, setGames] = useStoredState('cms_games_v1', DEFAULT_GAMES);
   const [storedDocsAdmin, setDocs] = useStoredState('cms_docs_v2', DEFAULT_DOCS);
-  const docs = useMemo(() => mergeWithDefaults(storedDocsAdmin, DEFAULT_DOCS, (d) => d.id), [storedDocsAdmin]);
+  // Tombstones make seed-doc deletion stick: mergeWithDefaults re-appends any
+  // DEFAULT_DOCS entry missing from the store, so without this filter a
+  // deleted default documents resurrect on
+  // the next render while the UI reports success.
+  const [deletedDocIds, setDeletedDocIds] = useStoredState<string[]>('cms_deleted_doc_ids_v1', []);
+  const docs = useMemo(
+    () => mergeWithDefaults(storedDocsAdmin, DEFAULT_DOCS, (d) => d.id).filter((d) => !deletedDocIds.includes(d.id)),
+    [storedDocsAdmin, deletedDocIds],
+  );
   const products = useMemo(() => buildProductCatalog(docs, games), [docs, games]);
   const [selectedProductId, setSelectedProductId] = useStoredState('cms_selected_product_v1', products[0]?.id ?? DEFAULT_GAMES[0].id);
   const activeProductId = products.some((product) => product.id === selectedProductId) ? selectedProductId : products[0]?.id ?? DEFAULT_GAMES[0].id;
@@ -1272,10 +914,10 @@ export function Admin() {
   const [backOfficeSections, setBackOfficeSections] = useStoredState('cms_backoffice_sections_v1', DEFAULT_BACKOFFICE_SECTIONS);
   const [integrationSections, setIntegrationSections] = useStoredState('cms_integration_sections_v1', DEFAULT_INTEGRATION_SECTIONS);
   const [customSections, setCustomSections] = useStoredState<Record<string, SectionEntry[]>>('cms_custom_sections_v1', DEFAULT_CUSTOM_SECTIONS);
-  const [translations, setTranslations] = useStoredState('cms_translations_v2', DEFAULT_DOC_TRANSLATIONS);
+  const [translations, setTranslations, translationsHydrated] = useStoredState('cms_translations_v2', DEFAULT_DOC_TRANSLATIONS);
   const [releases, setReleases] = useStoredState('cms_releases_v2', DEFAULT_RELEASES);
   const [auditEvents, setAuditEvents] = useStoredState<AuditEvent[]>('cms_audit_events_v1', []);
-  const [storedThemePresets, setThemePresets] = useStoredState<ThemePreset[]>('cms_theme_presets_v1', DEFAULT_THEME_PRESETS);
+  const [storedThemePresets, setThemePresets, themePresetsHydrated] = useStoredState<ThemePreset[]>('cms_theme_presets_v1', DEFAULT_THEME_PRESETS);
   const themePresets = useMemo(() => normalizeThemePresets(storedThemePresets), [storedThemePresets]);
   const [activeThemeId] = useStoredState('cms_active_theme_preset_v1', DEFAULT_THEME_PRESETS[0].id);
   const activeTheme = resolveThemePreset(themePresets, activeThemeId);
@@ -1295,11 +937,13 @@ export function Admin() {
   })), [backOfficeSections, customSections, docs, integrationSections, sections, setBackOfficeSections, setCustomSections, setDocs, setIntegrationSections, setSections]);
   const localizationKeys = useMemo(() => buildLocalizationKeysFromBundles(docBundles), [docBundles]);
 
-  const showToast = (message: string, kind: Toast['kind'] = 'success') => {
+  // Stable identity: showToast is an effect dependency in consumers (e.g.
+  // LandingPageEditor's load effect) — recreating it per render loops them.
+  const showToast = useCallback((message: string, kind: Toast['kind'] = 'success') => {
     const id = Date.now();
     setToasts((items) => [...items, { id, message, kind }]);
     window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 2400);
-  };
+  }, []);
   const appendAuditEvent = useCallback((event: Omit<AuditEvent, 'id' | 'at' | 'actor'> & { actor?: string }) => {
     const actor = event.actor || currentUser?.id || currentUser?.username || 'unknown';
     const next: AuditEvent = {
@@ -1339,7 +983,7 @@ export function Admin() {
       return <AccessDenied permission={requiredPermission} />;
     }
     if (activePage === 'documents') {
-      return <DocumentsPage docs={docs} setDocs={setDocs} products={products} customSections={customSections} setCustomSections={setCustomSections} releases={releases} setReleases={setReleases} translations={translations} setTranslations={setTranslations} localizationKeys={localizationKeys} revisionHistories={revisionHistories} setRevisionHistories={setRevisionHistories} openModal={setModal} toast={showToast} selectedProductId={activeProductId} setSelectedProductId={changeSelectedProductId} appendAuditEvent={appendAuditEvent} />;
+      return <DocumentsPage docs={docs} setDocs={setDocs} markDocDeleted={(id) => setDeletedDocIds([...deletedDocIds.filter((item) => item !== id), id])} clearDocTombstone={(id) => { if (deletedDocIds.includes(id)) setDeletedDocIds(deletedDocIds.filter((item) => item !== id)); }} products={products} customSections={customSections} setCustomSections={setCustomSections} releases={releases} setReleases={setReleases} translations={translations} setTranslations={setTranslations} localizationKeys={localizationKeys} revisionHistories={revisionHistories} setRevisionHistories={setRevisionHistories} openModal={setModal} toast={showToast} selectedProductId={selectedProductId === '' ? '' : activeProductId} setSelectedProductId={changeSelectedProductId} appendAuditEvent={appendAuditEvent} />;
     }
     if (activePage === 'sections') {
       return <SectionsPage bundles={docBundles} openModal={setModal} toast={showToast} revisionHistories={revisionHistories} setRevisionHistories={setRevisionHistories} mediaAssets={mediaAssets} setMediaAssets={setMediaAssets} appendAuditEvent={appendAuditEvent} />;
@@ -1365,22 +1009,27 @@ export function Admin() {
     return <Dashboard products={products} sections={[...sections, ...backOfficeSections, ...integrationSections, ...Object.values(customSections).flat()]} translations={translations} localizationKeys={localizationKeys} releases={releases} selectedProductId={activeProductId} setSelectedProductId={changeSelectedProductId} />;
   }, [activePage, activeProductId, activeTheme.id, appendAuditEvent, auditEvents, backOfficeSections, changeSelectedProductId, currentUser?.role, customSections, docBundles, docs, games, integrationSections, localizationKeys, mediaAssets, products, releases, revisionHistories, sections, setCustomSections, setDocs, setGames, setMediaAssets, setReleases, setRevisionHistories, setThemePresets, setTranslations, themePresets, translations]);
 
+  // Normalize-on-mount effects must wait for hydration: before it they see
+  // code defaults and their write attempts are refused (which used to spam
+  // "Still loading…" banners on every editor load) — and historically these
+  // were silent clobber vectors for the server values.
   useEffect(() => {
+    if (!themePresetsHydrated) return;
     const normalized = normalizeThemePresets(storedThemePresets);
     if (!themePresetListEqual(storedThemePresets, normalized)) setThemePresets(normalized);
-  }, [setThemePresets, storedThemePresets]);
+  }, [setThemePresets, storedThemePresets, themePresetsHydrated]);
 
   useEffect(() => {
+    if (!translationsHydrated) return;
     const synced = syncTranslationEntriesWithKeys(translations, localizationKeys);
     if (synced !== translations) setTranslations(synced);
-  }, [localizationKeys, setTranslations, translations]);
+  }, [localizationKeys, setTranslations, translations, translationsHydrated]);
 
   // Resolve the tenant name for the workspace context strip. Falls back to
   // "DocPilot" on the standalone /admin mount where there is no company session.
   useEffect(() => {
     let active = true;
-    void fetch('/api/v2/auth/me', { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : null))
+    void authMeCached()
       .then((data) => { if (active && data?.company?.name) setCompanyName(data.company.name); })
       .catch(() => { /* standalone mount — keep fallback */ });
     return () => { active = false; };
@@ -1397,7 +1046,7 @@ export function Admin() {
     <AdminBasePathContext.Provider value={basePath}>
       <main className="app-view" style={themePresetStyle(activeTheme)}>
         <header className="app-header">
-          <AviatorLogo product="DocPilot" />
+          <BrandLogo />
           <div className="user-info"><span className="user-name">{currentUser?.name ?? 'User'} · {roleLabel(currentUser?.role ?? 'partner')}</span><button className="btn-logout" onClick={logout}>Logout</button></div>
         </header>
         <div className="app-layout">
@@ -1529,9 +1178,11 @@ function Dashboard({ products, sections, translations, localizationKeys, release
   );
 }
 
-function DocumentsPage({ docs, setDocs, products, customSections, setCustomSections, releases, setReleases, translations, setTranslations, localizationKeys, revisionHistories, setRevisionHistories, openModal, toast, selectedProductId, setSelectedProductId, appendAuditEvent }: {
+function DocumentsPage({ docs, setDocs, markDocDeleted, clearDocTombstone, products, customSections, setCustomSections, releases, setReleases, translations, setTranslations, localizationKeys, revisionHistories, setRevisionHistories, openModal, toast, selectedProductId, setSelectedProductId, appendAuditEvent }: {
   docs: DocEntry[];
-  setDocs: (items: DocEntry[]) => void;
+  setDocs: (items: DocEntry[]) => boolean;
+  markDocDeleted: (id: string) => void;
+  clearDocTombstone: (id: string) => void;
   products: ProductEntry[];
   customSections: Record<string, SectionEntry[]>;
   setCustomSections: (items: Record<string, SectionEntry[]>) => void;
@@ -1550,8 +1201,11 @@ function DocumentsPage({ docs, setDocs, products, customSections, setCustomSecti
 }) {
   const basePath = useAdminBasePath();
   const productOptions = products.length ? products : [emptyProductOption(selectedProductId || DEFAULT_GAMES[0].id)];
-  const selectedProduct = productOptions.find((product) => product.id === selectedProductId) ?? productOptions[0];
-  const productDocs = selectedProduct?.docs ?? [];
+  // '' = the "All products" option — previously swallowed by the ?? fallback,
+  // which silently re-selected the first product and hid every other doc.
+  const allProducts = !selectedProductId;
+  const selectedProduct = allProducts ? null : productOptions.find((product) => product.id === selectedProductId) ?? productOptions[0];
+  const productDocs = allProducts ? docs : selectedProduct?.docs ?? [];
   const [docQuery, setDocQuery] = useState('');
   const [taxonomyFilter, setTaxonomyFilter] = useState('');
   const orderedProductDocs = sortDocsForNavigation(productDocs);
@@ -1596,7 +1250,13 @@ function DocumentsPage({ docs, setDocs, products, customSections, setCustomSecti
         const nextRevisionHistories = { ...revisionHistories };
         delete nextCustomSections[doc.id];
         delete nextRevisionHistories[doc.id];
-        setDocs(nextDocs);
+        if (!setDocs(nextDocs)) {
+          // Write blocked (offline / not hydrated yet / no permission) — the
+          // persistence-error banner explains; do NOT claim success.
+          openModal(null);
+          return;
+        }
+        markDocDeleted(doc.id); // tombstone so seed docs can't resurrect via mergeWithDefaults
         setCustomSections(nextCustomSections);
         setReleases(releases.filter((release) => release.docId !== doc.id));
         setRevisionHistories(nextRevisionHistories);
@@ -1614,7 +1274,12 @@ function DocumentsPage({ docs, setDocs, products, customSections, setCustomSecti
           title: doc.title,
           summary: 'Document, sections, release snapshots, revisions, and translation values removed.',
         });
-        if (!nextDocs.some((item) => item.gameId === selectedProductId)) {
+        // Only reset the product filter when a CONCRETE product lost its last
+        // doc. In "All products" mode ('' matches no gameId) this check was
+        // trivially true and force-switched the filter — firing the "switch
+        // product context?" confirm and making every other doc vanish from
+        // the list right after a delete.
+        if (selectedProductId && !nextDocs.some((item) => item.gameId === selectedProductId)) {
           setSelectedProductId(nextDocs[0]?.gameId ?? DEFAULT_GAMES[0].id);
         }
         openModal(null);
@@ -1637,6 +1302,7 @@ function DocumentsPage({ docs, setDocs, products, customSections, setCustomSecti
         });
       } else {
         const starterSections = starterSectionsForDocument(next, selectedProduct?.name ?? 'this product');
+        clearDocTombstone(next.id); // re-creating a previously deleted doc id must un-tombstone it
         setDocs([{ ...next, sections: starterSections.length }, ...docs]);
         setCustomSections({ ...customSections, [next.id]: starterSections });
         appendAuditEvent({
@@ -1679,7 +1345,7 @@ function DocumentsPage({ docs, setDocs, products, customSections, setCustomSecti
             <div className="document-card-meta"><strong>v{doc.version}</strong><span>{doc.sections} sections</span><span>Owner {doc.owner}</span><span>Reviewer {doc.reviewer || doc.owner}</span><span>{docAudience(doc)}</span><span>{docNavPlacement(doc)}</span><span>Order {typeof doc.navOrder === 'number' && Number.isFinite(doc.navOrder) ? doc.navOrder : '—'}</span><span>{docSlug(doc)}</span></div>
             <div className="document-card-actions">
               <Link className="btn btn-sm" to={docPath(doc)}>Preview</Link>
-              <Link className="btn btn-sm btn-ghost" to={`${basePath}/sections`}>Edit Content</Link>
+              <Link className="btn btn-sm btn-ghost" to={`${basePath}/sections?doc=${encodeURIComponent(doc.id)}`}>Edit Content</Link>
               <button className="btn btn-sm btn-ghost" type="button" onClick={() => edit(doc)}>Edit</button>
               <div className="nav-order-controls" role="group" aria-label={`Navigation order controls for ${doc.title}`}>
                 <button className="btn btn-sm btn-ghost" type="button" onClick={() => moveDocumentInNavigation(doc, -1)} disabled={orderedProductDocs[0]?.id === doc.id} title="Move up" aria-label={`Move ${doc.title} up`}>↑</button>
@@ -1907,7 +1573,7 @@ function ProductForm({ game, games, save, close }: {
   const [data] = useState<GameEntry>(() => game ?? {
     id: '',
     name: '',
-    studio: 'Aviator Studio',
+    studio: 'Demo Studio',
     status: 'draft',
     description: '',
     version: '0.1.0',
@@ -1920,7 +1586,7 @@ function ProductForm({ game, games, save, close }: {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
       const name = text(form, 'name').trim();
-      const studio = text(form, 'studio').trim() || 'Aviator Studio';
+      const studio = text(form, 'studio').trim() || 'Demo Studio';
       const statusInput = text(form, 'status') as WorkflowStatus;
       const description = text(form, 'description').trim();
       const version = text(form, 'version').trim() || '0.1.0';
@@ -1993,7 +1659,18 @@ function SectionsPage({ bundles, openModal, toast, revisionHistories, setRevisio
 }) {
   const location = useLocation();
   const routeQuery = useMemo(() => new URLSearchParams(location.search).get('q') ?? '', [location.search]);
-  const [activeDocId, setActiveDocId] = useState(bundles[0]?.doc.id ?? 'doc-manual');
+  // ?doc=<id> opens the editor on a specific document ("Edit Content" from
+  // the Documents page) — without it the editor always opened bundles[0].
+  const routeDocId = useMemo(() => new URLSearchParams(location.search).get('doc'), [location.search]);
+  const [activeDocId, setActiveDocId] = useState(
+    (routeDocId && bundles.some((bundle) => bundle.doc.id === routeDocId) ? routeDocId : null)
+    ?? bundles[0]?.doc.id
+    ?? 'doc-manual',
+  );
+  useEffect(() => {
+    if (routeDocId && bundles.some((bundle) => bundle.doc.id === routeDocId)) setActiveDocId(routeDocId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeDocId]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
@@ -2029,9 +1706,23 @@ function SectionsPage({ bundles, openModal, toast, revisionHistories, setRevisio
     }
     if (history) {
       const timestamp = revisionTimestamp();
+      // History entries snapshot the state AFTER each change. When this is
+      // the doc's FIRST recorded change there would be no pre-change version
+      // to restore (e.g. nothing to click to undo a deletion) — so seed the
+      // history with a baseline of the state before this change.
+      const baseline: RevisionHistoryEntry[] = docRevisionHistory.length ? [] : [{
+        id: revisionHistoryId(doc.id, 0, { label: 'Baseline', detail: 'Before first recorded change' }, timestamp),
+        label: 'Baseline',
+        detail: 'Document state before the first recorded change',
+        timestamp,
+        version: doc.version,
+        sectionId: undefined,
+        snapshot: cloneRevisionValue(sections),
+      }];
       setRevisionHistories({
         ...revisionHistories,
         [doc.id]: limitRevisionHistory([
+          ...baseline,
           ...docRevisionHistory,
           {
             id: revisionHistoryId(doc.id, docRevisionHistory.length + 1, history, timestamp),
@@ -2076,7 +1767,10 @@ function SectionsPage({ bundles, openModal, toast, revisionHistories, setRevisio
     toast('Document change redone.');
   };
   const restoreDocRevision = (entry: RevisionHistoryEntry) => {
-    if (revisionEqual(sections, entry.snapshot)) return;
+    if (revisionEqual(sections, entry.snapshot)) {
+      toast('Already at this version — pick an earlier entry to roll back.');
+      return;
+    }
     setDocRevision((revision) => ({
       past: limitRevisions([...revision.past, cloneRevisionValue(sections)]),
       future: [],
@@ -2197,7 +1891,9 @@ function SectionsPage({ bundles, openModal, toast, revisionHistories, setRevisio
   };
   const publishOrUpdateSection = (section: SectionEntry) => {
     const wasPublished = section.status === 'published';
-    commitSections(sections.map((item) => item.id === section.id ? { ...item, status: 'published', updatedAt: today() } : item), {
+    // Persist the entry we were handed: callers in edit mode pass the live
+    // draft composed from the editor, so content must not be dropped here.
+    commitSections(sections.map((item) => item.id === section.id ? { ...section, status: 'published', updatedAt: today() } : item), {
       label: wasPublished ? 'Updated published version' : 'Published section',
       detail: `${section.number} ${section.title}`,
       sectionId: section.id,
@@ -2215,7 +1911,7 @@ function SectionsPage({ bundles, openModal, toast, revisionHistories, setRevisio
     toast(wasPublished ? 'Section updated.' : 'Section published.');
   };
   const saveSectionAsDraft = (section: SectionEntry) => {
-    commitSections(sections.map((item) => item.id === section.id ? { ...item, status: 'draft', updatedAt: today() } : item), {
+    commitSections(sections.map((item) => item.id === section.id ? { ...section, status: 'draft', updatedAt: today() } : item), {
       label: 'Saved draft',
       detail: `${section.number} ${section.title}`,
       sectionId: section.id,
@@ -2489,8 +2185,8 @@ function SectionsPage({ bundles, openModal, toast, revisionHistories, setRevisio
               beginPointerDrag={(event) => beginSectionPointerDrag(section.id, event)}
               dragOverSection={(event) => dragOverSection(section.id, event)}
               dropSection={(event) => dropSection(section.id, event)}
-              publishOrUpdate={() => publishOrUpdateSection(section)}
-              saveAsDraft={() => saveSectionAsDraft(section)}
+              publishOrUpdate={publishOrUpdateSection}
+              saveAsDraft={saveSectionAsDraft}
               duplicateSection={() => duplicateSection(section)}
               deleteSection={() => deleteSection(section)}
               mediaAssets={mediaAssets}
@@ -2580,6 +2276,13 @@ function TranslationsPage({ docs, setDocs, bundles, customSections, setCustomSec
     const hasValue = selected ? (selected.values[key.id] ?? '').trim().length > 0 : false;
     return matchesQuery && (!missingOnly || !hasValue);
   });
+  // QA (qa-admin §7): rendering all ~673 strings at once produced ~189k px
+  // pages on mobile. Page the list; filters reset the window.
+  const [visibleLimit, setVisibleLimit] = useState(TRANSLATION_PAGE_SIZE);
+  useEffect(() => {
+    setVisibleLimit(TRANSLATION_PAGE_SIZE);
+  }, [query, missingOnly, selectedDocId, selectedCode]);
+  const pagedKeys = visibleKeys.slice(0, visibleLimit);
   const updateSelectedLocale = (updates: Partial<TranslationEntry>) => {
     if (!selected) return;
     setEntries(entries.map((entry) => entry.code === selected.code ? { ...entry, ...updates, updatedAt: today() } : entry));
@@ -2700,7 +2403,7 @@ function TranslationsPage({ docs, setDocs, bundles, customSections, setCustomSec
               <label className="field"><span>Search content</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Section, content label, or source text" /></label>
               <label className="toggle-field"><input type="checkbox" checked={missingOnly} onChange={(event) => setMissingOnly(event.target.checked)} /> Missing only</label>
               <button className="btn btn-sm btn-ghost" type="button" disabled={!missingKeys.length} onClick={goToNextMissing}>Next missing</button>
-              <span>{visibleKeys.length} visible strings</span>
+              <span>{visibleKeys.length > pagedKeys.length ? `${pagedKeys.length} of ${visibleKeys.length} strings shown` : `${visibleKeys.length} visible strings`}</span>
             </div>
             <div className={`key-value-table ${isEnglish ? 'english-mode' : ''}`}>
               <div className="key-value-head">
@@ -2708,7 +2411,7 @@ function TranslationsPage({ docs, setDocs, bundles, customSections, setCustomSec
                 {!isEnglish ? <span>English Source</span> : null}
                 <span>{isEnglish ? 'English Copy' : `${selected.language} Translation`}</span>
               </div>
-              {visibleKeys.map((key) => {
+              {pagedKeys.map((key) => {
                 const translationLabel = isEnglish ? `${key.label} English copy` : `${key.label} ${selected.language} translation`;
                 return (
                 <div className="key-value-row" key={key.id}>
@@ -2741,6 +2444,13 @@ function TranslationsPage({ docs, setDocs, bundles, customSections, setCustomSec
                 );
               })}
             </div>
+            {visibleKeys.length > pagedKeys.length ? (
+              <div className="translation-pagination">
+                <button className="btn btn-sm" type="button" onClick={() => setVisibleLimit((limit) => limit + TRANSLATION_PAGE_SIZE)}>
+                  Show {Math.min(TRANSLATION_PAGE_SIZE, visibleKeys.length - pagedKeys.length)} more ({visibleKeys.length - pagedKeys.length} remaining)
+                </button>
+              </div>
+            ) : null}
           </section>
         ) : null}
       </div>
@@ -3437,22 +3147,46 @@ function AdminContextBar({ companyName, product, documentCount, hasDraftWorkflow
   );
 }
 
-function useStoredState<T>(key: string, fallback: T): [T, (next: T) => void] {
-  const [value, setValue] = useState(() => store.get(key, fallback));
+function useStoredState<T>(key: string, fallback: T): [T, (next: T) => boolean, boolean] {
+  // Pin the first fallback: callers pass inline literals ([] / {}) whose
+  // identity changes every render — with `fallback` in the effect deps that
+  // re-ran hydrate forever, each run cancelling the last, so the instance
+  // never counted as hydrated and every write was refused.
+  const fallbackRef = useRef(fallback);
+  const [value, setValue] = useState(() => store.get(key, fallbackRef.current));
+  // Per-INSTANCE hydration flag. This instance's state may start from code
+  // defaults (fresh context, or localStorage cache dropped on quota), so a
+  // write before THIS instance saw the server value would persist
+  // defaults-derived state and clobber real content. Verified data loss.
+  const hydratedRef = useRef(isPrehydrationSafeKey(key));
+  const [hydrated, setHydrated] = useState(hydratedRef.current);
   useEffect(() => {
     let active = true;
-    void store.hydrate(key, fallback).then((next) => {
-      if (active) setValue(next);
+    void store.hydrate(key, fallbackRef.current).then((next) => {
+      if (active) {
+        setValue(next);
+        hydratedRef.current = true;
+        setHydrated(true);
+      }
     });
     return () => {
       active = false;
     };
-  }, [fallback, key]);
-  const update = useCallback((next: T) => {
-    if (!store.set(key, next)) return;
-    setValue(next);
   }, [key]);
-  return [value, update];
+  // Returns whether the write was accepted — writes are blocked while this
+  // instance is unhydrated, offline, or without permission (the reason is
+  // surfaced via the persistence-error event). Callers showing success
+  // toasts must check the return value.
+  const update = useCallback((next: T) => {
+    if (!hydratedRef.current) {
+      notifyBlockedWrite('Still loading the latest data from the server — please retry in a moment.');
+      return false;
+    }
+    if (!store.set(key, next)) return false;
+    setValue(next);
+    return true;
+  }, [key]);
+  return [value, update, hydrated];
 }
 
 function useRevisionedState<T>(initialValue: T) {
@@ -3588,17 +3322,20 @@ function DocumentForm({ doc, docs, products, selectedProductId, save, close }: {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const template = getDocumentTemplate(text(form, 'templateId'));
-    const title = text(form, 'title') || template.title;
+    // QA (qa-admin §7): cleared required fields silently fell back to the
+    // template defaults, so empty submits "succeeded" with no validation.
+    // Keep the raw values so validateDocumentDraft can actually reject them.
+    const title = text(form, 'title').trim();
     const next = {
       ...data,
       gameId: text(form, 'gameId'),
       title,
-      slug: text(form, 'slug') || makeSlug(title),
+      slug: text(form, 'slug').trim() || (title ? makeSlug(title) : ''),
       type: text(form, 'type') as DocKind,
       description: text(form, 'description') || template.description,
       version: text(form, 'version'),
       status: text(form, 'status') as WorkflowStatus,
-      owner: text(form, 'owner') || template.owner,
+      owner: text(form, 'owner').trim(),
       reviewer: text(form, 'reviewer') || text(form, 'owner') || template.owner,
       audience: text(form, 'audience') || template.audience,
       taxonomy: text(form, 'taxonomy') || template.taxonomy,
@@ -3731,6 +3468,9 @@ function DocumentationActionBar({ doc, selectedSection, addSection, editSection,
           ) : null}
         </div>
         <RevisionButtons undo={undoRevision} redo={redoRevision} canUndo={canUndo} canRedo={canRedo} label="Document revision history" />
+        {/* Exact reader rendering in both themes — what readers will see. */}
+        <a className="btn btn-sm btn-ghost" href={`${docPath(doc)}?previewTheme=light`} target="_blank" rel="noreferrer" title="Open the published reader view in light mode">☀ Preview</a>
+        <a className="btn btn-sm btn-ghost" href={`${docPath(doc)}?previewTheme=dark`} target="_blank" rel="noreferrer" title="Open the published reader view in dark mode">◐ Dark</a>
         <button className={`btn btn-sm btn-ghost ${elementsLibraryOpen ? 'active' : ''}`} type="button" onClick={toggleElementsLibrary} aria-pressed={elementsLibraryOpen}>Elements</button>
         <button className="btn btn-sm btn-ghost" type="button" onClick={collapseAllSections} disabled={sectionCount === 0 || collapsedCount === sectionCount}>Collapse All</button>
         <button className="btn btn-sm btn-ghost" type="button" onClick={expandAllSections} disabled={collapsedCount === 0}>Expand All</button>
@@ -4001,9 +3741,11 @@ function EditableSectionPreview({ section, sectionTargets, save, openModal, edit
     if (!root) return;
     const detachHotspots = attachMarkerHotspotInteractions(root);
     const detachCarousels = attachDocCarouselInteractions(root);
+    const detachTabs = attachDocTabInteractions(root);
     return () => {
       detachHotspots();
       detachCarousels();
+      detachTabs();
     };
   }, [editableHtml, activeScreenshot, activeComponent, activeTarget, markerAnimationKey]);
 
@@ -4138,9 +3880,13 @@ function EditableSectionPreview({ section, sectionTargets, save, openModal, edit
       return;
     }
 
+    // Open the inline editor from the hover ✎ button OR a direct click on the
+    // editable element itself — text that looks editable must actually edit,
+    // otherwise keystrokes silently land on <body> and vanish.
+    if (componentInsertMode) return;
     const editButton = event.target.closest<HTMLButtonElement>('.cms-inline-edit-button');
-    const element = editButton?.closest<HTMLElement>('[data-cms-editable-index]');
-    if (!editButton || !element || !root?.contains(element)) return;
+    const element = (editButton ?? event.target).closest<HTMLElement>('[data-cms-editable-index]');
+    if (!element || !root?.contains(element)) return;
     event.preventDefault();
     event.stopPropagation();
     const target = readInlineEditableTarget(element, root);
@@ -6000,8 +5746,8 @@ function SectionInlineEditor({ section, sectionTargets, save, cancel, selected, 
   beginPointerDrag: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   dragOverSection: (event: ReactDragEvent<HTMLElement>) => void;
   dropSection: (event: ReactDragEvent<HTMLElement>) => void;
-  publishOrUpdate: () => void;
-  saveAsDraft: () => void;
+  publishOrUpdate: (next: SectionEntry) => void;
+  saveAsDraft: (next: SectionEntry) => void;
   duplicateSection: () => void;
   deleteSection: () => void;
   mediaAssets: MediaAsset[];
@@ -6152,28 +5898,33 @@ function SectionInlineEditor({ section, sectionTargets, save, cancel, selected, 
     if (!preset || preset.locked) return;
     setMarkerColorPresets(markerColorPresets.filter((item) => item.id !== id));
   };
+  // Every save path (form submit, ✓ Update/Publish, ◌ Save Draft) must read
+  // the LIVE draft — saving the stale `section` prop silently discards edits.
+  const composeSectionFromDraft = (): SectionEntry => {
+    const title = draft.title.trim() || section.title;
+    const rawContent = editableTextToHtml(draft.draftText, draft.draftHtml);
+    const html = syncSectionTitle(rawContent, title);
+    return {
+      ...section,
+      title,
+      slug: draft.slug.trim() || makeSlug(title),
+      summary: getSectionSummary(html, 0),
+      status: draft.status,
+      owner: draft.owner.trim() || section.owner,
+      reviewer: draft.reviewer.trim() || draft.owner.trim() || section.owner,
+      comments: draft.reviewComment.trim() ? [
+        ...(section.comments || []),
+        nextContentComment(draft.owner.trim() || section.owner, draft.reviewComment, `${section.number} ${title}`),
+      ] : section.comments,
+      updatedAt: today(),
+      html,
+    };
+  };
 
   return (
     <form data-cms-section-id={section.id} className={`cms-section-block editing ${selected ? 'selected' : ''} ${dragging ? 'dragging' : ''}`} onMouseDown={selectSection} onFocus={selectSection} onDragOver={dragOverSection} onDrop={dropSection} onSubmit={(event) => {
       event.preventDefault();
-      const title = draft.title.trim() || section.title;
-      const rawContent = editableTextToHtml(draft.draftText, draft.draftHtml);
-      const html = syncSectionTitle(rawContent, title);
-      save({
-        ...section,
-        title,
-        slug: draft.slug.trim() || makeSlug(title),
-        summary: getSectionSummary(html, 0),
-        status: draft.status,
-        owner: draft.owner.trim() || section.owner,
-        reviewer: draft.reviewer.trim() || draft.owner.trim() || section.owner,
-        comments: draft.reviewComment.trim() ? [
-          ...(section.comments || []),
-          nextContentComment(draft.owner.trim() || section.owner, draft.reviewComment, `${section.number} ${title}`),
-        ] : section.comments,
-        updatedAt: today(),
-        html,
-      });
+      save(composeSectionFromDraft());
     }}>
       {reorderMode ? <SectionReorderCard section={section} dragging={dragging} dropPosition={dropPosition} /> : null}
       <SectionControllerBar
@@ -6181,8 +5932,8 @@ function SectionInlineEditor({ section, sectionTargets, save, cancel, selected, 
         selected={selected}
         editing
         editSection={() => undefined}
-        publishOrUpdate={publishOrUpdate}
-        saveAsDraft={saveAsDraft}
+        publishOrUpdate={() => publishOrUpdate(composeSectionFromDraft())}
+        saveAsDraft={() => saveAsDraft(composeSectionFromDraft())}
         duplicateSection={duplicateSection}
         deleteSection={deleteSection}
         beginPointerDrag={beginPointerDrag}
@@ -7787,7 +7538,7 @@ ${rows}
 
   if (block.kind === 'carousel') {
     const slides = block.items.map((item, index) => `      <figure class="doc-carousel-slide" data-component-item-id="${escapeHtml(item.id)}" data-slide-index="${index}">
-        <img src="${escapeHtml(item.body)}" alt="${escapeHtml(item.title || `Slide ${index + 1}`)}" loading="lazy" draggable="false">
+        <img src="${escapeHtml(item.body)}" alt="${escapeHtml(item.title || `Slide ${index + 1}`)}" draggable="false">
         <figcaption class="doc-component-item-title">${escapeHtml(item.title || `Slide ${index + 1}`)}</figcaption>
         <p class="doc-component-item-body doc-carousel-slide-src">${escapeHtml(item.body)}</p>
       </figure>`).join('\n');
@@ -8175,23 +7926,6 @@ function starterSectionsForDocument(doc: DocEntry, productName: string) {
       .replace(/\bthe document\b/gi, doc.title)
     ),
   ));
-}
-
-function interfaceDocSection(id: string, number: string, slug: string, title: string, summary: string, status: WorkflowStatus, owner: string, bodyHtml: string): SectionEntry {
-  const headingClass = Number.parseInt(number, 10) % 2 === 0 ? ' alt' : '';
-  const html = `
-<div class="section-banner${headingClass}" id="${id}">
-  <div class="container">
-    <div class="num">${escapeHtml(number)}</div>
-    <h2>${escapeHtml(title)}</h2>
-  </div>
-</div>
-<section class="content">
-  <div class="container">
-${bodyHtml.trim()}
-  </div>
-</section>`.trim();
-  return { id, number, slug, title, summary, status, owner, updatedAt: '2026-05-28', html };
 }
 
 function docSection(id: string, number: string, slug: string, title: string, summary: string, status: WorkflowStatus, owner: string, paragraphs: string[]): SectionEntry {
@@ -8734,11 +8468,6 @@ function readPctStyle(element: HTMLElement, property: 'left' | 'top' | 'width' |
   return Number.isFinite(value) ? clampPct(value) : fallback;
 }
 
-function readPctData(value: string | undefined, fallback: number) {
-  const parsed = Number.parseFloat(value ?? '');
-  return Number.isFinite(parsed) ? clampPct(parsed) : clampPct(fallback);
-}
-
 function markerTextAlign(value: string | undefined | null): MarkerTextAlign {
   return value === 'center' || value === 'right' ? value : 'left';
 }
@@ -8968,388 +8697,6 @@ function markerHotspotWavesMarkup(kind: MarkerKind) {
   const pointerGlyph = kind === 'pointer' ? '<span class="doc-marker-pointer-icon" aria-hidden="true"></span>' : '';
   const linkGlyph = kind === 'link' ? '<span class="doc-marker-link-icon" aria-hidden="true"></span>' : '';
   return `<span class="doc-marker-wave wave-a" aria-hidden="true"></span><span class="doc-marker-wave wave-b" aria-hidden="true"></span><span class="doc-marker-wave wave-c" aria-hidden="true"></span><span class="doc-marker-core-glow" aria-hidden="true"></span>${pointerGlyph}${linkGlyph}`;
-}
-
-function setHotspotOpenState(marker: HTMLElement, open: boolean) {
-  marker.classList.toggle('is-open', open);
-  marker.setAttribute('aria-expanded', open ? 'true' : 'false');
-}
-
-function resolveAnimeRuntime(source: unknown): AnimeRuntime | null {
-  if (!source || typeof source !== 'object') return null;
-  const runtime = source as Record<string, unknown>;
-  const animate = typeof runtime.animate === 'function' ? runtime.animate as AnimeRuntime['animate'] : undefined;
-  const createTimeline = typeof runtime.createTimeline === 'function' ? runtime.createTimeline as AnimeRuntime['createTimeline'] : undefined;
-  if (!animate && !createTimeline) return null;
-  return { animate, createTimeline };
-}
-
-function readGlobalAnimeRuntime(): AnimeRuntime | null {
-  if (typeof window === 'undefined') return null;
-  const runtime = resolveAnimeRuntime((window as unknown as { anime?: unknown }).anime);
-  return runtime;
-}
-
-async function loadAnimeRuntime() {
-  const existing = readGlobalAnimeRuntime();
-  if (existing) return existing;
-  if (animeRuntimePromise) return animeRuntimePromise;
-  animeRuntimePromise = (async () => {
-    try {
-      const moduleRuntime = await import(/* @vite-ignore */ ANIME_JS_ESM_URL);
-      const resolved = resolveAnimeRuntime(moduleRuntime)
-        ?? resolveAnimeRuntime((moduleRuntime as { default?: unknown }).default)
-        ?? readGlobalAnimeRuntime();
-      return resolved;
-    } catch (error) {
-      console.warn('Anime.js failed to load for hotspot animations', error);
-      return null;
-    }
-  })();
-  return animeRuntimePromise;
-}
-
-function positionHotspotPopover(marker: HTMLElement) {
-  const popover = marker.querySelector<HTMLElement>('.doc-marker-popover');
-  if (!popover) return;
-  const stage = marker.closest<HTMLElement>('.annotated-image');
-  if (!stage) return;
-  const markerRect = marker.getBoundingClientRect();
-  const stageRect = stage.getBoundingClientRect();
-  const popoverRect = popover.getBoundingClientRect();
-  if (!stageRect.width || !stageRect.height || !popoverRect.width || !popoverRect.height) return;
-  const defaultX = ((markerRect.left - stageRect.left) + markerRect.width * 0.5) / stageRect.width * 100;
-  const defaultY = ((markerRect.top - stageRect.top) + markerRect.height + 10) / stageRect.height * 100;
-  const desiredX = readPctData(marker.dataset.popoverX, defaultX);
-  const desiredY = readPctData(marker.dataset.popoverY, defaultY);
-  const desiredLeft = stageRect.width * (desiredX / 100);
-  const desiredTop = stageRect.height * (desiredY / 100);
-  const clampedLeft = clampBetween(desiredLeft, 8, Math.max(8, stageRect.width - popoverRect.width - 8));
-  const clampedTop = clampBetween(desiredTop, 8, Math.max(8, stageRect.height - popoverRect.height - 8));
-  const markerOffsetLeft = markerRect.left - stageRect.left;
-  const markerOffsetTop = markerRect.top - stageRect.top;
-  popover.style.left = `${clampedLeft - markerOffsetLeft}px`;
-  popover.style.top = `${clampedTop - markerOffsetTop}px`;
-  popover.style.transform = 'translate(0, 0)';
-}
-
-function closeHotspotMarkers(scope: ParentNode, except: HTMLElement | null = null) {
-  scope.querySelectorAll<HTMLElement>('.doc-marker[data-kind="link"], .doc-marker[data-kind="pointer"]').forEach((marker) => {
-    if (marker.classList.contains('cms-draggable-marker')) return;
-    if (except && marker === except) return;
-    const wasOpen = marker.classList.contains('is-open');
-    setHotspotOpenState(marker, false);
-    if (wasOpen) marker.dispatchEvent(new CustomEvent('hotspot-close'));
-  });
-}
-
-function attachMarkerHotspotAnimations(scope: HTMLElement, markerSelector: string) {
-  let disposed = false;
-  const markerAnimations = new Map<HTMLElement, AnimeAnimationHandle[]>();
-  const markerPressAnimations = new Map<HTMLElement, AnimeAnimationHandle>();
-  const detachMarkerListeners: Array<() => void> = [];
-
-  const setAmbientAnimationState = (marker: HTMLElement) => {
-    const shouldAnimate = marker.dataset.animated === 'true';
-    markerAnimations.get(marker)?.forEach((animation) => {
-      try {
-        if (shouldAnimate) {
-          // anime.js requires `this` bound to the animation. Detaching via
-          // ?? loses the binding, which crashes `resume` inside animejs.
-          if (typeof animation.resume === 'function') animation.resume();
-          else if (typeof animation.play === 'function') animation.play();
-        } else {
-          if (typeof animation.pause === 'function') animation.pause();
-        }
-      } catch {
-        // Defensive: some anime.js timelines are in a transient state
-        // (just-created or just-completed) where resume/pause throws.
-        // The state will reconcile on the next animation tick.
-      }
-    });
-  };
-
-  const animateMarkerPress = (marker: HTMLElement, open: boolean, anime: AnimeRuntime) => {
-    markerPressAnimations.get(marker)?.cancel?.();
-    if (!anime.animate) return;
-    const markerAnimation = anime.animate(marker, {
-      scale: open ? [1, 1.06, 1.02] : [1.02, 1],
-      duration: open ? 280 : 180,
-      ease: 'outQuad',
-    });
-    if (markerAnimation) markerPressAnimations.set(marker, markerAnimation);
-    const popover = marker.querySelector<HTMLElement>('.doc-marker-popover');
-    if (!popover || !open) return;
-    anime.animate(popover, {
-      opacity: [0, 1],
-      scale: [.96, 1],
-      translateY: [6, 0],
-      duration: 220,
-      ease: 'outQuad',
-    });
-  };
-
-  void loadAnimeRuntime().then((anime) => {
-    if (disposed || !anime?.animate) return;
-    const markers = Array.from(scope.querySelectorAll<HTMLElement>(markerSelector));
-
-    markers.forEach((marker) => {
-      const waves = Array.from(marker.querySelectorAll<HTMLElement>('.doc-marker-wave'));
-      const coreGlow = marker.querySelector<HTMLElement>('.doc-marker-core-glow');
-      const handles: AnimeAnimationHandle[] = [];
-
-      if (waves.length) {
-        const waveAnimation = anime.animate?.(waves, {
-          scale: [0.76, 1.68],
-          opacity: [0.46, 0],
-          duration: 2100,
-          ease: 'outQuad',
-          loop: true,
-          delay: (_target: unknown, index: number) => index * 380,
-        });
-        if (waveAnimation) handles.push(waveAnimation);
-      }
-
-      if (coreGlow) {
-        const glowAnimation = anime.animate?.(coreGlow, {
-          scale: [0.94, 1.08, 0.94],
-          opacity: [0.28, 0.48, 0.28],
-          duration: 1800,
-          ease: 'inOutSine',
-          loop: true,
-        });
-        if (glowAnimation) handles.push(glowAnimation);
-      }
-
-      markerAnimations.set(marker, handles);
-      setAmbientAnimationState(marker);
-      const onEnter = () => setAmbientAnimationState(marker);
-      const onLeave = () => setAmbientAnimationState(marker);
-      const onOpen = () => animateMarkerPress(marker, true, anime);
-      const onClose = () => animateMarkerPress(marker, false, anime);
-      marker.addEventListener('mouseenter', onEnter, { passive: true });
-      marker.addEventListener('mouseleave', onLeave, { passive: true });
-      marker.addEventListener('hotspot-open', onOpen);
-      marker.addEventListener('hotspot-close', onClose);
-      detachMarkerListeners.push(() => {
-        marker.removeEventListener('mouseenter', onEnter);
-        marker.removeEventListener('mouseleave', onLeave);
-        marker.removeEventListener('hotspot-open', onOpen);
-        marker.removeEventListener('hotspot-close', onClose);
-      });
-    });
-  });
-
-  return () => {
-    disposed = true;
-    detachMarkerListeners.forEach((detach) => detach());
-    markerPressAnimations.forEach((animation) => animation.cancel?.());
-    markerAnimations.forEach((animations) => animations.forEach((animation) => animation.cancel?.()));
-    markerPressAnimations.clear();
-    markerAnimations.clear();
-  };
-}
-
-function attachMarkerHotspotInteractions(scope: HTMLElement) {
-  const markerSelector = '.doc-marker[data-kind="link"], .doc-marker[data-kind="pointer"]';
-  const detachAnimations = attachMarkerHotspotAnimations(scope, markerSelector);
-
-  const resolveMarker = (target: EventTarget | null) => {
-    if (!(target instanceof HTMLElement)) return null;
-    const marker = target.closest<HTMLElement>(markerSelector);
-    if (!marker || marker.classList.contains('cms-draggable-marker') || !scope.contains(marker)) return null;
-    return marker;
-  };
-
-  const onScopeClick = (event: Event) => {
-    if (!(event instanceof MouseEvent)) return;
-    const target = event.target;
-    if (target instanceof HTMLElement && target.closest('.doc-marker-popover-cta')) return;
-    if (target instanceof HTMLElement && target.closest('.doc-marker-popover')) return;
-    const marker = resolveMarker(target);
-    if (!marker) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const nextOpen = !marker.classList.contains('is-open');
-    closeHotspotMarkers(scope, nextOpen ? marker : null);
-    if (nextOpen) positionHotspotPopover(marker);
-    setHotspotOpenState(marker, nextOpen);
-    marker.dispatchEvent(new CustomEvent(nextOpen ? 'hotspot-open' : 'hotspot-close'));
-  };
-
-  const onScopeKeyDown = (event: Event) => {
-    if (!(event instanceof KeyboardEvent)) return;
-    if (event.target instanceof HTMLElement && event.target.closest('.doc-marker-popover-cta')) return;
-    if (event.key === 'Escape') {
-      closeHotspotMarkers(scope, null);
-      return;
-    }
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    const marker = resolveMarker(event.target);
-    if (!marker) return;
-    event.preventDefault();
-    const nextOpen = !marker.classList.contains('is-open');
-    closeHotspotMarkers(scope, nextOpen ? marker : null);
-    if (nextOpen) positionHotspotPopover(marker);
-    setHotspotOpenState(marker, nextOpen);
-    marker.dispatchEvent(new CustomEvent(nextOpen ? 'hotspot-open' : 'hotspot-close'));
-  };
-
-  const onDocumentPointerDown = (event: Event) => {
-    if (!(event.target instanceof Node)) return;
-    if (!scope.contains(event.target)) {
-      closeHotspotMarkers(scope, null);
-      return;
-    }
-    if (event.target instanceof HTMLElement && event.target.closest('.doc-marker-popover')) return;
-    const marker = resolveMarker(event.target);
-    if (!marker) closeHotspotMarkers(scope, null);
-  };
-
-  scope.addEventListener('click', onScopeClick);
-  scope.addEventListener('keydown', onScopeKeyDown);
-  document.addEventListener('pointerdown', onDocumentPointerDown);
-  const onResize = () => {
-    scope.querySelectorAll<HTMLElement>(`${markerSelector}.is-open`).forEach((item) => positionHotspotPopover(item));
-  };
-  window.addEventListener('resize', onResize);
-
-  return () => {
-    detachAnimations();
-    scope.removeEventListener('click', onScopeClick);
-    scope.removeEventListener('keydown', onScopeKeyDown);
-    document.removeEventListener('pointerdown', onDocumentPointerDown);
-    window.removeEventListener('resize', onResize);
-  };
-}
-
-function attachDocCarouselInteractions(scope: ParentNode) {
-  const detachments: Array<() => void> = [];
-  const carousels = Array.from(scope.querySelectorAll<HTMLElement>('[data-doc-carousel]'));
-
-  carousels.forEach((carousel) => {
-    const viewport = carousel.querySelector<HTMLElement>('.doc-carousel-viewport');
-    const track = carousel.querySelector<HTMLElement>('.doc-carousel-track');
-    const slides = Array.from(carousel.querySelectorAll<HTMLElement>('.doc-carousel-slide'));
-    if (!viewport || !track || !slides.length) return;
-
-    let index = 0;
-    let width = 0;
-    let dragging = false;
-    let pointerId: number | null = null;
-    let startX = 0;
-    let deltaX = 0;
-
-    const prevButton = carousel.querySelector<HTMLButtonElement>('[data-carousel-prev]');
-    const nextButton = carousel.querySelector<HTMLButtonElement>('[data-carousel-next]');
-    const dotButtons = Array.from(carousel.querySelectorAll<HTMLButtonElement>('[data-carousel-dot]'));
-
-    const setTransform = (pixelOffset = 0, animate = true) => {
-      width = viewport.getBoundingClientRect().width || width || 1;
-      track.style.transition = animate ? 'transform .26s ease' : 'none';
-      const baseOffset = -(index * width);
-      track.style.transform = `translate3d(${baseOffset + pixelOffset}px, 0, 0)`;
-    };
-
-    const syncControls = () => {
-      if (prevButton) prevButton.disabled = index <= 0;
-      if (nextButton) nextButton.disabled = index >= slides.length - 1;
-      dotButtons.forEach((button) => {
-        const dotIndex = Number(button.dataset.carouselDot || '0');
-        const active = dotIndex === index;
-        button.classList.toggle('active', active);
-        button.setAttribute('aria-pressed', active ? 'true' : 'false');
-      });
-      slides.forEach((slide, slideIndex) => {
-        slide.setAttribute('aria-hidden', slideIndex === index ? 'false' : 'true');
-      });
-    };
-
-    const goTo = (nextIndex: number, animate = true) => {
-      index = clampBetween(Math.round(nextIndex), 0, slides.length - 1);
-      setTransform(0, animate);
-      syncControls();
-    };
-
-    const onPrev = () => goTo(index - 1);
-    const onNext = () => goTo(index + 1);
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (slides.length <= 1) return;
-      if (event.button !== 0 && event.pointerType === 'mouse') return;
-      dragging = true;
-      pointerId = event.pointerId;
-      startX = event.clientX;
-      deltaX = 0;
-      viewport.setPointerCapture(event.pointerId);
-      carousel.classList.add('dragging');
-      setTransform(0, false);
-    };
-
-    const onPointerMove = (event: PointerEvent) => {
-      if (!dragging || pointerId !== event.pointerId) return;
-      deltaX = event.clientX - startX;
-      setTransform(deltaX, false);
-    };
-
-    const finishDrag = (event: PointerEvent) => {
-      if (!dragging || pointerId !== event.pointerId) return;
-      dragging = false;
-      carousel.classList.remove('dragging');
-      const threshold = Math.max(40, (width || viewport.getBoundingClientRect().width || 1) * 0.14);
-      if (Math.abs(deltaX) > threshold) {
-        goTo(index + (deltaX < 0 ? 1 : -1), true);
-      } else {
-        goTo(index, true);
-      }
-      deltaX = 0;
-      if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
-      pointerId = null;
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        goTo(index - 1);
-      } else if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        goTo(index + 1);
-      }
-    };
-
-    prevButton?.addEventListener('click', onPrev);
-    nextButton?.addEventListener('click', onNext);
-    dotButtons.forEach((button) => {
-      const dotIndex = Number(button.dataset.carouselDot || '0');
-      const onDotClick = () => goTo(dotIndex);
-      button.addEventListener('click', onDotClick);
-      detachments.push(() => button.removeEventListener('click', onDotClick));
-    });
-    viewport.addEventListener('pointerdown', onPointerDown);
-    viewport.addEventListener('pointermove', onPointerMove);
-    viewport.addEventListener('pointerup', finishDrag);
-    viewport.addEventListener('pointercancel', finishDrag);
-    carousel.addEventListener('keydown', onKeyDown);
-
-    const onResize = () => goTo(index, false);
-    window.addEventListener('resize', onResize);
-    goTo(0, false);
-
-    detachments.push(() => {
-      prevButton?.removeEventListener('click', onPrev);
-      nextButton?.removeEventListener('click', onNext);
-      viewport.removeEventListener('pointerdown', onPointerDown);
-      viewport.removeEventListener('pointermove', onPointerMove);
-      viewport.removeEventListener('pointerup', finishDrag);
-      viewport.removeEventListener('pointercancel', finishDrag);
-      carousel.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('resize', onResize);
-    });
-  });
-
-  return () => {
-    detachments.forEach((detach) => detach());
-  };
 }
 
 function markerStyleMarkup(marker: MarkerDraft) {
@@ -10086,15 +9433,6 @@ function insertBeforeSectionClose(html: string, block: string) {
   return `${html.slice(0, match.index)}\n${block}\n${html.slice(match.index)}`;
 }
 
-function clampPct(value: number) {
-  return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
-}
-
-function clampBetween(value: number, min: number, max: number) {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, value));
-}
-
 function buildLocalizationKeysFromBundles(bundles: { doc: DocEntry; sections: SectionEntry[] }[]) {
   return uniqueLocalizationKeys(bundles.flatMap((bundle) => buildLocalizationKeys(bundle.sections, bundle.doc)));
 }
@@ -10829,15 +10167,11 @@ function mergeWithDefaults<T>(stored: T[], defaults: T[], idOf: (item: T) => str
 }
 
 function NotFound() {
-  return <main className="not-found"><h1>404</h1><p>This route is not part of the Aviator docs prototype.</p><Link className="btn btn-red" to="/">Back to Landing</Link></main>;
+  return <main className="not-found"><h1>404</h1><p>This route is not part of the documentation site.</p><Link className="btn btn-red" to="/">Back to Landing</Link></main>;
 }
 
-// Orphaned-but-retained surfaces. The Minescape interface seed
-// (DEFAULT_MINESCAPE_INTERFACE_SECTIONS / makeMarker / DEFAULT_MINESCAPE_DOC_ID)
-// is dead code — the canonical Minescape doc lives in persisted state — kept as
-// a reference snapshot. Login / Protected / safeExternalUrl are legacy helpers
-// retained for a planned re-wire. Referenced here so noUnusedLocals stays happy.
-void DEFAULT_MINESCAPE_DOC_ID; void makeMarker; void DEFAULT_MINESCAPE_INTERFACE_SECTIONS;
+// Orphaned-but-retained surfaces. Login / Protected / safeExternalUrl are legacy
+// helpers retained for a planned re-wire. Referenced here so noUnusedLocals stays happy.
 void Login; void Protected; void safeExternalUrl;
 
 export default App;

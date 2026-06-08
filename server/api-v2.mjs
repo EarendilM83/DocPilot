@@ -271,6 +271,15 @@ async function routeCompanyUpdate(req, res, companyId) {
   values.push(nowIso());
   values.push(companyId);
   db.prepare(`UPDATE companies SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  // Slug renamed → keep the old slug working as a redirect alias, and free
+  // the new slug from any alias row it may have occupied.
+  const slugChange = changes.find((c) => c.startsWith('slug:'));
+  if (slugChange) {
+    db.prepare(
+      'INSERT OR REPLACE INTO company_slug_aliases (old_slug, company_id, created_at) VALUES (?, ?, ?)',
+    ).run(existing.slug, companyId, nowIso());
+    db.prepare('DELETE FROM company_slug_aliases WHERE old_slug = ?').run(body.slug.trim());
+  }
   appendAudit({
     userId: user.id,
     action: 'company.update',
@@ -317,12 +326,33 @@ async function routeBrandingUpdate(req, res, companyId) {
   return send(res, 200, { branding: companyBrandingPayload(companyId) });
 }
 
-// Public-by-slug: returns minimal branding for the login page render (no PII)
+// Public-by-slug: returns minimal branding for the login page render (no PII).
+// Renamed slugs resolve via company_slug_aliases — the payload carries the
+// CURRENT slug, so the client can redirect old bookmarks to the canonical URL.
 async function routePublicCompanyBranding(req, res, slug) {
-  const company = findCompanyBySlug(slug);
+  let company = findCompanyBySlug(slug);
+  if (!company) {
+    const alias = db.prepare('SELECT company_id FROM company_slug_aliases WHERE old_slug = ?').get(String(slug));
+    if (alias) company = companyById(alias.company_id);
+  }
   if (!company) return send(res, 404, { error: 'Not found.' });
   if (company.status !== 'active') return send(res, 404, { error: 'Not found.' });
   return send(res, 200, { company: publicCompanyPayload(company) }, {
+    'x-robots-tag': 'noindex, nofollow',
+  });
+}
+
+// Public doc → owning company. Lets the doc auth gate bounce an anonymous
+// deep link to the owning tenant's login instead of a hardcoded one.
+// Reader URLs use either the document slug or id; only active companies.
+async function routePublicDocCompany(req, res, slugOrId) {
+  const row = db.prepare(
+    `SELECT c.slug, c.name, c.status FROM documents d
+       JOIN companies c ON c.id = d.company_id
+      WHERE d.slug = ? OR d.id = ?`,
+  ).get(slugOrId, slugOrId);
+  if (!row || row.status !== 'active') return send(res, 404, { error: 'Not found.' });
+  return send(res, 200, { company: { slug: row.slug, name: row.name } }, {
     'x-robots-tag': 'noindex, nofollow',
   });
 }
@@ -390,7 +420,11 @@ async function routeUserUpdate(req, res, companyId, userId) {
   if (typeof body.phone === 'string') db.prepare('UPDATE users SET phone = ?, updated_at = ? WHERE id = ?').run(body.phone.trim() || null, nowIso(), userId);
   if (typeof body.telegram === 'string') db.prepare('UPDATE users SET telegram = ?, updated_at = ? WHERE id = ?').run(body.telegram.trim() || null, nowIso(), userId);
   if (typeof body.signalUsername === 'string') db.prepare('UPDATE users SET signal_username = ?, updated_at = ? WHERE id = ?').run(body.signalUsername.trim() || null, nowIso(), userId);
-  if (typeof body.status === 'string') db.prepare('UPDATE users SET status = ?, updated_at = ? WHERE id = ?').run(body.status, nowIso(), userId);
+  if (typeof body.status === 'string') {
+    // Self-disable is an instant lockout — the session dies with the account.
+    if (userId === user.id && body.status !== 'active') return send(res, 400, { error: 'You cannot disable your own account.' });
+    db.prepare('UPDATE users SET status = ?, updated_at = ? WHERE id = ?').run(body.status, nowIso(), userId);
+  }
   if (Array.isArray(body.roles)) setUserRoles(userId, body.roles);
   if (Object.prototype.hasOwnProperty.call(body, 'stagingCardEnabled')) {
     const enabled = body.stagingCardEnabled === false || body.stagingCardEnabled === 0 ? 0 : 1;
@@ -478,6 +512,10 @@ export async function handleApiV2(req, res, url) {
   // Public-by-slug branding (anyone hitting /c/:slug)
   let m = p.match(/^\/api\/v2\/public\/companies\/([A-Za-z0-9_-]+)\/branding$/);
   if (m && req.method === 'GET') return routePublicCompanyBranding(req, res, m[1]);
+
+  // Public doc → owning company (login routing for gated doc deep links)
+  m = p.match(/^\/api\/v2\/public\/docs\/([A-Za-z0-9_-]+)\/company$/);
+  if (m && req.method === 'GET') return routePublicDocCompany(req, res, m[1]);
 
   // Superadmin scope
   if (p === '/api/v2/companies' && req.method === 'GET') return routeCompaniesList(req, res);

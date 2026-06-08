@@ -1,5 +1,5 @@
 {
-  "name": "aviatordocs",
+  "name": "docpilot",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -19,6 +19,7 @@
     "sync-platform": "bash scripts/sync-platform.sh"
   },
   "dependencies": {
+    "@atlaskit/tokens": "^13.2.0",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/roboto": "^5.2.10",
