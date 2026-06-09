@@ -77,6 +77,101 @@ function ensureCmsState() {
   console.log(`[seed] Wrote initial cms-state with ${Object.keys(seed.keys || {}).length} key(s) → ${stateFile}`);
 }
 
+// Idempotent, content-agnostic reconcile: any image/video embedded in a doc
+// section but missing from the Media Library (cms_media_assets_v1) gets
+// registered, so the library mirrors what the docs actually reference. Runs on
+// EVERY boot (including already-seeded volumes) — this is what backfills the
+// library on an existing deploy after a redeploy. Only adds srcs that are
+// currently referenced, so an asset an admin deleted does not come back unless
+// a doc still uses it. Metadata is enriched from seed-state.json when present,
+// else derived from the file name.
+const MEDIA_SRC_RE = /(?:\/images\/[A-Za-z0-9\-_/]+|\/api\/docpilot\/media\/files\/[A-Za-z0-9\-_.]+)\.(?:png|jpe?g|gif|webp|svg|mp4|mov|webm)/gi;
+const MEDIA_MIME = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
+};
+
+function deriveAlt(fileName) {
+  return fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+}
+
+function backfillMediaLibrary() {
+  const stateFile = process.env.DOCPILOT_STATE_FILE
+    || join(process.env.DOCPILOT_DATA_DIR || join(ROOT, '.docpilot-data'), 'cms-state.json');
+  if (!existsSync(stateFile)) return; // ensureCmsState handles the fresh case
+  let state;
+  try { state = JSON.parse(readFileSync(stateFile, 'utf8')); }
+  catch { return; }
+  const keys = state.keys || {};
+
+  const mediaEntry = keys.cms_media_assets_v1;
+  const media = Array.isArray(mediaEntry?.value) ? mediaEntry.value : [];
+  const haveSrc = new Set(media.map((a) => a && a.src));
+
+  // Curated metadata from the shipped seed (alt/tags/id), keyed by src.
+  const seedPath = join(__dirname, 'seed-state.json');
+  let seedBySrc = new Map();
+  if (existsSync(seedPath)) {
+    try {
+      const seedMedia = JSON.parse(readFileSync(seedPath, 'utf8'))?.keys?.cms_media_assets_v1?.value || [];
+      seedBySrc = new Map(seedMedia.filter((a) => a && a.src).map((a) => [a.src, a]));
+    } catch { /* seed optional */ }
+  }
+
+  const docTitle = new Map((keys.cms_docs_v2?.value || []).map((d) => [d.id, d.title]));
+
+  // Walk every section across custom + regular sections, collect referenced srcs.
+  const usage = new Map(); // src -> Set(labels)
+  const order = [];
+  const collect = (docId, section) => {
+    if (!section || typeof section.html !== 'string') return;
+    for (const src of section.html.match(MEDIA_SRC_RE) || []) {
+      if (!usage.has(src)) { usage.set(src, new Set()); order.push(src); }
+      usage.get(src).add(`${docTitle.get(docId) || docId} · ${section.number} ${section.title}`);
+    }
+  };
+  const customRoot = keys.cms_custom_sections_v1?.value || {};
+  for (const [docId, sections] of Object.entries(customRoot)) {
+    for (const s of (Array.isArray(sections) ? sections : Object.values(sections))) collect(docId, s);
+  }
+  for (const s of (keys.cms_sections_v2?.value || [])) collect(s.docId || s.documentId || 'unknown', s);
+
+  const nowIsoStr = nowIso();
+  const today = nowIsoStr.slice(0, 10);
+  const added = [];
+  for (const src of order) {
+    if (haveSrc.has(src)) continue;
+    const fileName = src.split('/').pop();
+    const ext = fileName.split('.').pop().toLowerCase();
+    const seed = seedBySrc.get(src);
+    added.push({
+      id: seed?.id || `media-backfill-${fileName.replace(/\.[^.]+$/, '').slice(0, 40)}`,
+      src,
+      alt: seed?.alt || deriveAlt(fileName),
+      tags: (seed?.tags?.length ? seed.tags : ['imported']),
+      owner: seed?.owner || 'Docs',
+      updatedAt: today,
+      createdAt: seed?.createdAt || nowIsoStr,
+      fileName,
+      originalName: seed?.originalName || fileName,
+      mimeType: MEDIA_MIME[ext] || 'application/octet-stream',
+      usageRefs: Array.from(usage.get(src)),
+      ...(MEDIA_MIME[ext]?.startsWith('video/') ? { videoLoopEnabled: true } : {}),
+    });
+  }
+
+  if (!added.length) return;
+  keys.cms_media_assets_v1 = {
+    value: [...added, ...media],
+    revision: `cms_media_assets_v1:backfill:${Date.now()}`,
+    previous_revision: mediaEntry?.revision || null,
+    updated_at: nowIsoStr,
+  };
+  state.keys = keys;
+  writeFileSync(stateFile, JSON.stringify(state, null, 2));
+  console.log(`[seed] Media backfill: registered ${added.length} embedded asset(s) into the library.`);
+}
+
 export async function seedOnBoot() {
   const slug = process.env.COMPANY_SLUG || DEFAULTS.companySlug;
   const name = process.env.COMPANY_NAME || DEFAULTS.companyName;
@@ -85,6 +180,7 @@ export async function seedOnBoot() {
   const adminName = process.env.ADMIN_NAME || DEFAULTS.adminName;
 
   ensureCmsState();
+  backfillMediaLibrary();
 
   const company = ensureCompany(slug, name);
 
